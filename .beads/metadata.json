@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ai_portfolio_manager",
+  "project_id": "9d4fb62a-659c-4248-839b-d1959d6c9da9"
+}
