@@ -1,6 +1,6 @@
 # SPEC.md — Local-First AI Portfolio Manager
 
-> **Status**: v1.2 — active implementation spec. Companion documents: [current.md](research/current.md) (current implementation), [research/1.md](research/1.md), [research/2.md](research/2.md) (external OSS landscape research).
+> **Status**: v1.2 — active implementation spec. Companion documents: [current.md](../research/current.md) (current implementation), [research/1.md](../research/1.md), [research/2.md](../research/2.md) (external OSS landscape research).
 >
 > **Audience**: This spec is written to be executable by an AI coding agent (Cursor / Claude Code) that will later implement each component, and human-readable for architectural review.
 
