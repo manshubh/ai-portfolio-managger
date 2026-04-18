@@ -116,7 +116,8 @@ flowchart TB
 - MCP registration smoke-test log (`research/mcp-smoke-test.md`) proving that finstack-mcp, NseKit-MCP, and nse-bse-mcp each return data for at least one India ticker and one US ticker from the agent's session.
 - `input/india/philosophy.md` migrated into the SPEC §7.7 shape: YAML front-matter with thresholds + sector exceptions + `personas_enabled` + `persona_rotation`, followed by the full current prose body unchanged.
 - `input/india/theses.yaml` scaffolded with the current holdings (values may be empty strings).
-- `config/wealthfolio.md`, `config/mcp-servers.md`, `config/benchmark-tickers.md` authored per SPEC §17.
+- `config/wealthfolio.md` (must include clear instructions on locating the UI's SQLite file and setting up Docker volume mounts), `config/mcp-servers.md`, `config/benchmark-tickers.md` authored per SPEC §17.
+- Docker environment defined (`Dockerfile` and `docker-compose.yml`) at the repo root to containerize the Python/Shell skill layer, ensuring maximum portability without manual system dependencies.
 - `.agents/directory-contract.md` — table mapping every `temp/research/*` artifact to its producer phase + consumer phase + authoritative owner, per SPEC §2 principle 4.
 - [CLAUDE.md](../CLAUDE.md) rewritten to under 80 lines, with the 5 most critical invariants from SPEC §19 at the top: (1) agent never writes Wealthfolio DB, (2) Phase 1 snapshot is frozen, (3) deterministic math vs LLM narrative, (4) immediate-action cap = 2, (5) no fabrication. Existing Beads integration block preserved.
 - [AGENTS.md](../AGENTS.md) mirrors CLAUDE.md where sensible; existing non-interactive shell guidance preserved.

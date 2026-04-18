@@ -67,6 +67,13 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 
+### 5. Research-Plan-Implement (RPI) Framework
+
+When executing work against the milestones in `docs/implementation.md`:
+- **Research (R):** Save raw API explorations, MCP tests, or deep-dives in `research/milestones/` (e.g., `M0-investigation.md`).
+- **Plan (P):** Before implementing, create a technical design document in `docs/milestones/` (e.g., `M0-plan.md`). Alternatively, put the plan directly in the `bd` issue. 
+- **Implement (I):** Execute the plan into the final structure (`skills/`, `.agents/`) based tightly on `docs/SPEC.md`. 
+
 ---
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->

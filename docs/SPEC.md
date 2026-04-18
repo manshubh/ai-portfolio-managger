@@ -1,6 +1,6 @@
 # SPEC.md — Local-First AI Portfolio Manager
 
-> **Status**: v1.2 — active implementation spec. Companion documents: [current.md](../research/current.md) (current implementation), [research/1.md](../research/1.md), [research/2.md](../research/2.md) (external OSS landscape research).
+> **Status**: v1.2 — active implementation spec. Companion documents: [current.md](../research/archive/pre-v1.2-design/current.md) (current implementation), [research/archive/pre-v1.2-design/1.md](../research/archive/pre-v1.2-design/1.md), [research/archive/pre-v1.2-design/2.md](../research/archive/pre-v1.2-design/2.md) (external OSS landscape research).
 >
 > **Audience**: This spec is written to be executable by an AI coding agent (Cursor / Claude Code) that will later implement each component, and human-readable for architectural review.
 
@@ -178,6 +178,7 @@ flowchart TB
 **Skill layer (deterministic)**
 - Contains zero LLM calls.
 - Each skill is a standalone CLI (Python or Go) or MCP server with a documented input/output JSON contract.
+- **Dockerized Portability:** This layer is packaged in a Docker container (`Dockerfile` + `docker-compose.yml`). The container mounts the external Wealthfolio DB (read-only) and the local `ledger/` directory as volumes, eliminating manual local environment setup.
 - Skills are idempotent and re-runnable.
 - Failure modes are explicit (exit codes, stderr messages, JSON `{error: ...}`).
 
@@ -216,6 +217,13 @@ flowchart TB
 ### 5.2 Why Wealthfolio
 
 Wealthfolio is the chosen tracker because it already provides the mechanics this system depends on: transaction accounting, corporate-action handling, portfolio visualization, and a local SQLite database the agent can read safely. The spec assumes we build around Wealthfolio rather than maintaining a parallel custom tracker.
+
+### 5.2.1 Documenting Wealthfolio for Users
+
+To ensure anyone picking up this repo can easily run it, `config/wealthfolio.md` serves as the primary onboarding document for the tracker. It must clearly outline:
+1. Where to download and install the Wealthfolio native app.
+2. How to find the hidden `wealthfolio.sqlite` database file based on the operating system.
+3. How to mount that SQLite file into the `docker-compose.yml` so the Dockerized agent runtime has secure read access.
 
 ### 5.3 How the agent uses Wealthfolio
 
@@ -1010,7 +1018,7 @@ Stocks scoring ≤30 with confirmed dealbreakers also skip debate (the dealbreak
 
 ### 11.3 Debate format
 
-Borrowed from `TradingAgents` (see [research/2.md](research/2.md)).
+Borrowed from `TradingAgents` (see [research/archive/pre-v1.2-design/2.md](research/archive/pre-v1.2-design/2.md)).
 
 - **Max 2 rounds** per ticker.
 - **Round 1**:
@@ -1459,11 +1467,13 @@ ai-portfolio-manager/
 │   │   └── validate-prerequisites.sh
 │   └── README.md                             # How agents invoke skills
 │
-├── research/                                 # Historical notes and supporting research
-│   ├── current.md                            # Historical — the pre-SPEC implementation summary
-│   ├── 1.md                                  # OSS landscape (kept)
-│   ├── 2.md                                  # Detailed architecture research (kept)
-│   └── brainstorming.md                      # 2026-04-17 spec-alignment notes
+├── research/                                 # Active milestone research and historical context
+│   ├── archive/
+│   │   └── pre-v1.2-design/                  # Historical context — pre-SPEC implementation
+│   │       ├── current.md                    # Historical — the pre-SPEC implementation summary
+│   │       ├── 1.md                          # OSS landscape (kept)
+│   │       └── 2.md                          # Detailed architecture research (kept)
+│   └── milestones/                           # Active R&D artifacts for the current milestone
 │
 └── temp/research/                            # Per-run scratch; cleaned between runs
     ├── portfolio-snapshot.csv

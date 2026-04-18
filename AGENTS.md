@@ -36,6 +36,13 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Research-Plan-Implement (RPI) Structure
+
+When executing `bd` issues representing `docs/implementation.md` milestones:
+- **Research:** Save sandbox scripts and technical explorations to `research/milestones/`.
+- **Plan:** Before coding, ensure there is a clear implementation plan located in `docs/milestones/` (or inside the `bd` issue).
+- **Implement:** Write final code in `skills/` or `.agents/`.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 
