@@ -576,38 +576,4 @@ These run alongside milestones, not as their own epics. File them as `bd` issues
 
 ---
 
-## 4. Open risks & mitigations
-
-Two risks dominate the rest; they come from the original draft and are kept verbatim in spirit.
-
-### 4.1 The CLAUDE.md instruction-following cliff
-
-As instruction count in CLAUDE.md grows, the LLM follows each instruction less reliably — uniformly, not just for the newest instruction (per Humanlayer research). SPEC has 21 invariants plus the Claude Code base system prompt. **Mitigation:** only the 5 most critical invariants live in [CLAUDE.md](../CLAUDE.md) (M0). The other 16 live in the phase prompt where they're actionable (M7). Skills carry boilerplate so prompts compose rather than reconstruct.
-
-### 4.2 MCP data quality for Indian equities
-
-The SPEC §15.2 fallback chain is well-designed on paper, but the first real portfolio run will expose gaps in finstack-mcp's India coverage. **Mitigation:** M14's manual audit of 5 Indian tickers against Screener.in (promoter %, pledge %, sector PE) before the first live run. Every gap opens a `bd` issue and is encoded into the Phase 2 prompt's explicit fallback ladder.
-
-### 4.3 Wealthfolio schema drift
-
-Upgrading Wealthfolio between our pin and a future release can silently break `wealthfolio-query` (SPEC §19.14). **Mitigation:** `skills/sql/wealthfolio-queries.sql` versions alongside the pinned release; upgrades are their own `bd` epic, not an invisible step.
-
-### 4.4 macOS / NFS `noclobber` atomicity
-
-`O_EXCL` is atomic on local filesystems but not over NFS. If the user's workspace lives on a network drive, `claim-ctl` can race. **Mitigation:** M1 README forbids network-mounted workspaces; acceptance tests run on local FS only.
-
-### 4.5 FTS5 `content='runs'` wiring
-
-Easy to misconfigure so that `report_fts` is disconnected from `runs.id` and full-text search silently returns empty. **Mitigation:** M4 has a dedicated test that inserts a row and searches it before we trust the wiring.
-
-### 4.6 Philosophy-hash migration
-
-First run after M0 migration compares `philosophy_hash` to nothing and may misleadingly surface "philosophy changed". **Mitigation:** Phase 1 treats absent prior hash as first run, not as change; this case is tested in M13.
-
-### 4.7 `^NSEI` price-return vs total-return
-
-Nifty 50 price-return doesn't reinvest dividends; comparing a full-return portfolio against it overstates alpha (SPEC §14.3). **Mitigation:** the benchmark skill labels this in every markdown output; the weekly report surfaces the caveat near the benchmark table.
-
----
-
 *End of playbook v1. Update alongside [docs/SPEC.md](SPEC.md) whenever milestones or acceptance criteria change.*
