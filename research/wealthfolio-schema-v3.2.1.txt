@@ -1,0 +1,475 @@
+CREATE TABLE __diesel_schema_migrations (
+       version VARCHAR(50) PRIMARY KEY NOT NULL,
+       run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS "platforms" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT,
+    "url" TEXT NOT NULL
+, external_id TEXT, kind TEXT NOT NULL DEFAULT 'BROKERAGE', website_url TEXT, logo_url TEXT);
+CREATE TABLE IF NOT EXISTS "accounts" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "account_type" TEXT NOT NULL DEFAULT 'SECURITIES',
+    "group" TEXT,
+    "currency" TEXT NOT NULL,
+    "is_default" BOOLEAN NOT NULL DEFAULT false,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "platform_id" TEXT, account_number TEXT, meta TEXT, provider TEXT, provider_account_id TEXT, tracking_mode TEXT NOT NULL DEFAULT 'NOT_SET', is_archived INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT "account_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "platforms" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE TABLE sqlite_sequence(name,seq);
+CREATE TABLE IF NOT EXISTS "goals" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "target_amount" NUMERIC NOT NULL DEFAULT 0, "is_achieved" BOOLEAN NOT NULL DEFAULT false);
+CREATE TABLE IF NOT EXISTS "goals_allocation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "percent_allocation" INTEGER NOT NULL,
+    "goal_id" TEXT NOT NULL,
+    "account_id" TEXT NOT NULL,
+    CONSTRAINT "account_goal_allocation_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "account_goal_allocation_goal_id_fkey" FOREIGN KEY ("goal_id") REFERENCES "goals" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "app_settings" (
+    "setting_key" TEXT NOT NULL PRIMARY KEY,
+    "setting_value" TEXT NOT NULL
+);
+CREATE TABLE contribution_limits (
+    id TEXT PRIMARY KEY NOT NULL,
+    group_name TEXT NOT NULL,
+    contribution_year INTEGER NOT NULL,
+    limit_amount NUMERIC NOT NULL,
+    account_ids TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+, start_date TIMESTAMP NULL, end_date TIMESTAMP NULL);
+CREATE TABLE holdings_snapshots (
+    id TEXT PRIMARY KEY NOT NULL,           -- PK: e.g., "ACCOUNTID_YYYY-MM-DD"
+    account_id TEXT NOT NULL,
+    snapshot_date DATE NOT NULL,            -- Format: YYYY-MM-DD
+    currency TEXT NOT NULL,
+
+    -- Store complex data as JSON strings
+    positions TEXT NOT NULL DEFAULT '{}',     -- JSON HashMap<String, Position>
+    cash_balances TEXT NOT NULL DEFAULT '{}', -- JSON HashMap<String, Decimal>
+
+    -- Store Decimals as TEXT
+    cost_basis TEXT NOT NULL DEFAULT '0.0',
+    net_contribution TEXT NOT NULL DEFAULT '0.0',
+
+    -- Store timestamp
+    calculated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) -- Store as ISO 8601 string
+, net_contribution_base TEXT NOT NULL DEFAULT '0', cash_total_account_currency TEXT NOT NULL DEFAULT '0', cash_total_base_currency TEXT NOT NULL DEFAULT '0', source TEXT NOT NULL DEFAULT 'CALCULATED');
+CREATE INDEX idx_holdings_snapshots_account_date ON holdings_snapshots (account_id, snapshot_date);
+CREATE INDEX idx_holdings_snapshots_date ON holdings_snapshots (snapshot_date);
+CREATE INDEX idx_holdings_snapshots_account_id ON holdings_snapshots (account_id);
+CREATE TABLE daily_account_valuation (
+    id TEXT PRIMARY KEY NOT NULL,
+    account_id TEXT NOT NULL,
+    valuation_date DATE NOT NULL, -- Assuming NaiveDate maps to DATE
+    account_currency TEXT NOT NULL,
+    base_currency TEXT NOT NULL,
+    fx_rate_to_base TEXT NOT NULL, -- Storing Decimal as TEXT
+    cash_balance TEXT NOT NULL,
+    investment_market_value TEXT NOT NULL,
+    total_value TEXT NOT NULL,
+    cost_basis TEXT NOT NULL,
+    net_contribution TEXT NOT NULL,
+    calculated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) -- Store as ISO 8601 string with default
+);
+CREATE INDEX idx_daily_account_valuation_account_date ON daily_account_valuation(account_id, valuation_date);
+CREATE INDEX idx_dav_account_id ON daily_account_valuation (account_id);
+CREATE INDEX idx_dav_valuation_date ON daily_account_valuation (valuation_date);
+CREATE TABLE market_data_providers (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    url TEXT,
+    priority INTEGER NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    logo_filename TEXT,
+    last_synced_at TEXT,
+    last_sync_status TEXT,
+    last_sync_error TEXT
+, provider_type TEXT NOT NULL DEFAULT 'builtin', config TEXT);
+CREATE TABLE assets (
+    id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || '4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+
+    -- Core identity
+    kind TEXT NOT NULL,
+    name TEXT,
+    display_code TEXT,
+    notes TEXT,
+    metadata TEXT,
+
+    is_active INTEGER NOT NULL DEFAULT 1,
+
+    -- Valuation
+    quote_mode TEXT NOT NULL,             -- MARKET | MANUAL
+    quote_ccy TEXT NOT NULL,              -- currency prices/valuations are quoted in
+
+    -- Instrument identity (NULL for non-market assets)
+    instrument_type TEXT,                 -- EQUITY | CRYPTO | FX | OPTION | METAL
+    instrument_symbol TEXT,               -- canonical symbol (AAPL, BTC, EUR)
+    instrument_exchange_mic TEXT,         -- ISO 10383 MIC (XNAS, XTSE)
+
+    -- Computed canonical key (materialized on disk, never set directly)
+    instrument_key TEXT GENERATED ALWAYS AS (
+        CASE
+            WHEN instrument_type IS NULL OR instrument_symbol IS NULL THEN NULL
+            WHEN instrument_type IN ('FX', 'CRYPTO')
+                THEN instrument_type || ':' || instrument_symbol || '/' || quote_ccy
+            WHEN instrument_exchange_mic IS NOT NULL
+                THEN instrument_type || ':' || instrument_symbol || '@' || instrument_exchange_mic
+            ELSE instrument_type || ':' || instrument_symbol
+        END
+    ) STORED,
+
+    -- Provider configuration (single JSON blob)
+    provider_config TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+
+    CHECK (kind IN (
+        'INVESTMENT',
+        'PROPERTY', 'VEHICLE', 'COLLECTIBLE', 'PRECIOUS_METAL',
+        'PRIVATE_EQUITY', 'LIABILITY', 'OTHER',
+        'FX'
+    )),
+    CHECK (quote_mode IN ('MARKET', 'MANUAL')),
+    CHECK (is_active IN (0, 1)),
+    CHECK (metadata IS NULL OR json_valid(metadata)),
+    CHECK (provider_config IS NULL OR json_valid(provider_config))
+);
+CREATE UNIQUE INDEX idx_assets_instrument_key
+ON assets(instrument_key)
+WHERE instrument_key IS NOT NULL;
+CREATE INDEX idx_assets_kind ON assets(kind);
+CREATE INDEX idx_assets_is_active ON assets(is_active);
+CREATE INDEX idx_assets_display_code ON assets(display_code);
+CREATE TABLE import_runs (
+    id TEXT PRIMARY KEY NOT NULL,
+    account_id TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    run_type TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    review_mode TEXT NOT NULL,
+    applied_at TEXT,
+    checkpoint_in TEXT,
+    checkpoint_out TEXT,
+    summary TEXT,
+    warnings TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX ix_import_runs_account_id ON import_runs(account_id);
+CREATE INDEX ix_import_runs_status ON import_runs(status);
+CREATE TABLE brokers_sync_state (
+    account_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    checkpoint_json TEXT,
+    last_attempted_at TEXT,
+    last_successful_at TEXT,
+    last_error TEXT,
+    last_run_id TEXT,
+    sync_status TEXT NOT NULL DEFAULT 'IDLE',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (account_id, provider),
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (last_run_id) REFERENCES import_runs(id) ON DELETE SET NULL
+);
+CREATE INDEX ix_brokers_sync_state_provider ON brokers_sync_state(provider);
+CREATE TABLE activities (
+    id TEXT PRIMARY KEY NOT NULL,
+    account_id TEXT NOT NULL,
+    asset_id TEXT,
+
+    activity_type TEXT NOT NULL CHECK (activity_type IN (
+        'BUY', 'SELL', 'SPLIT',
+        'DIVIDEND', 'INTEREST', 'DEPOSIT', 'WITHDRAWAL',
+        'TRANSFER_IN', 'TRANSFER_OUT', 'FEE', 'TAX',
+        'CREDIT', 'ADJUSTMENT', 'UNKNOWN'
+    )),
+    activity_type_override TEXT,
+    source_type TEXT,
+    subtype TEXT,
+    status TEXT NOT NULL DEFAULT 'POSTED',
+
+    activity_date TEXT NOT NULL,
+    settlement_date TEXT,
+
+    quantity TEXT,
+    unit_price TEXT,
+    amount TEXT,
+    fee TEXT,
+    currency TEXT NOT NULL,
+    fx_rate TEXT,
+
+    notes TEXT,
+    metadata TEXT,
+
+    source_system TEXT,
+    source_record_id TEXT,
+    source_group_id TEXT,
+    idempotency_key TEXT,
+    import_run_id TEXT,
+
+    is_user_modified INTEGER NOT NULL DEFAULT 0,
+    needs_review INTEGER NOT NULL DEFAULT 0,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (import_run_id) REFERENCES import_runs(id) ON DELETE SET NULL
+);
+CREATE INDEX ix_activities_account_id ON activities(account_id);
+CREATE INDEX ix_activities_asset_id ON activities(asset_id);
+CREATE INDEX ix_activities_activity_date ON activities(activity_date);
+CREATE INDEX ix_activities_status ON activities(status);
+CREATE UNIQUE INDEX ux_activities_idempotency_key ON activities(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX ix_accounts_provider ON accounts(provider, provider_account_id) WHERE provider IS NOT NULL;
+CREATE TABLE IF NOT EXISTS "quotes" (
+    id          TEXT NOT NULL PRIMARY KEY,
+    asset_id    TEXT NOT NULL,
+    day         TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    open        TEXT,
+    high        TEXT,
+    low         TEXT,
+    close       TEXT NOT NULL,
+    adjclose    TEXT,
+    volume      TEXT,
+    currency    TEXT NOT NULL,
+    notes       TEXT,
+    created_at  TEXT NOT NULL,
+    timestamp   TEXT NOT NULL,
+
+    CHECK (length(day) = 10),
+
+    CONSTRAINT quotes_asset_fkey FOREIGN KEY (asset_id)
+        REFERENCES assets (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX uq_quotes_asset_day_source ON quotes(asset_id, day, source);
+CREATE INDEX idx_quotes_asset_day ON quotes(asset_id, day);
+CREATE INDEX idx_quotes_asset_source_day ON quotes(asset_id, source, day);
+CREATE INDEX idx_quotes_manual ON quotes(asset_id, day DESC) WHERE source = 'MANUAL';
+CREATE TABLE quote_sync_state (
+    asset_id TEXT PRIMARY KEY,
+    position_closed_date TEXT,  -- NULL = active, NOT NULL = closed (date when position was closed)
+    last_synced_at TEXT,
+    data_source TEXT NOT NULL DEFAULT 'YAHOO',
+    sync_priority INTEGER NOT NULL DEFAULT 1,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    profile_enriched_at TEXT,  -- NULL = needs enrichment, set after successful enrichment
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_quote_sync_state_priority ON quote_sync_state(sync_priority DESC);
+CREATE TABLE taxonomies (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#8abceb',
+    description TEXT,
+    is_system INTEGER NOT NULL DEFAULT 0,
+    is_single_select INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX ix_taxonomies_sort_order ON taxonomies(sort_order);
+CREATE TABLE taxonomy_categories (
+    id TEXT NOT NULL,
+    taxonomy_id TEXT NOT NULL,
+    parent_id TEXT,
+    name TEXT NOT NULL,
+    key TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#808080',
+    description TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+
+    PRIMARY KEY (taxonomy_id, id),
+    FOREIGN KEY (taxonomy_id) REFERENCES taxonomies(id) ON DELETE CASCADE,
+    FOREIGN KEY (taxonomy_id, parent_id) REFERENCES taxonomy_categories(taxonomy_id, id) ON DELETE CASCADE
+);
+CREATE INDEX ix_taxonomy_categories_parent ON taxonomy_categories(taxonomy_id, parent_id);
+CREATE INDEX ix_taxonomy_categories_key ON taxonomy_categories(taxonomy_id, key);
+CREATE TABLE asset_taxonomy_assignments (
+    id TEXT NOT NULL PRIMARY KEY,
+    asset_id TEXT NOT NULL,
+    taxonomy_id TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    weight INTEGER NOT NULL DEFAULT 10000,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+    FOREIGN KEY (taxonomy_id, category_id) REFERENCES taxonomy_categories(taxonomy_id, id) ON DELETE CASCADE,
+
+    CHECK (weight >= 0 AND weight <= 10000)
+);
+CREATE INDEX ix_asset_taxonomy_assignments_asset ON asset_taxonomy_assignments(asset_id);
+CREATE INDEX ix_asset_taxonomy_assignments_category ON asset_taxonomy_assignments(taxonomy_id, category_id);
+CREATE UNIQUE INDEX ix_asset_taxonomy_assignment_unique ON asset_taxonomy_assignments(asset_id, taxonomy_id, category_id);
+CREATE TABLE ai_threads (
+    id TEXT PRIMARY KEY NOT NULL,
+    title TEXT,
+    config_snapshot TEXT,  -- JSON: providerId, modelId, promptTemplateId, promptVersion, toolsAllowlist
+    is_pinned INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_ai_threads_updated_at ON ai_threads(updated_at DESC);
+CREATE INDEX idx_ai_threads_pinned_updated ON ai_threads(is_pinned DESC, updated_at DESC);
+CREATE TABLE ai_messages (
+    id TEXT PRIMARY KEY NOT NULL,
+    thread_id TEXT NOT NULL REFERENCES ai_threads(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,  -- 'user', 'assistant', 'system', 'tool'
+    content_json TEXT NOT NULL,  -- JSON array of message parts with schemaVersion
+    created_at TEXT NOT NULL,
+
+    -- Ensure valid role values
+    CHECK (role IN ('user', 'assistant', 'system', 'tool'))
+);
+CREATE INDEX idx_ai_messages_thread_id ON ai_messages(thread_id);
+CREATE INDEX idx_ai_messages_thread_created ON ai_messages(thread_id, created_at ASC);
+CREATE TABLE ai_thread_tags (
+    id TEXT PRIMARY KEY NOT NULL,
+    thread_id TEXT NOT NULL REFERENCES ai_threads(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+
+    -- Prevent duplicate tags on same thread
+    UNIQUE(thread_id, tag)
+);
+CREATE INDEX idx_ai_thread_tags_tag ON ai_thread_tags(tag);
+CREATE INDEX idx_ai_thread_tags_thread_id ON ai_thread_tags(thread_id);
+CREATE TABLE health_issue_dismissals (
+    issue_id TEXT PRIMARY KEY NOT NULL,
+    dismissed_at TEXT NOT NULL,
+    data_hash TEXT NOT NULL
+);
+CREATE INDEX idx_health_issue_dismissals_dismissed_at ON health_issue_dismissals(dismissed_at);
+CREATE INDEX ix_holdings_snapshots_source
+    ON holdings_snapshots(account_id, source);
+CREATE TABLE sync_cursor (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    cursor BIGINT NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE sync_outbox (
+    event_id TEXT PRIMARY KEY NOT NULL,
+    entity TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    op TEXT NOT NULL,
+    client_timestamp TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    payload_key_version INTEGER NOT NULL,
+    sent INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TEXT,
+    last_error TEXT,
+    last_error_code TEXT,
+    device_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX ix_sync_outbox_sent_created
+    ON sync_outbox(sent, created_at);
+CREATE INDEX ix_sync_outbox_entity
+    ON sync_outbox(entity, entity_id);
+CREATE TABLE sync_entity_metadata (
+    entity TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    last_event_id TEXT NOT NULL,
+    last_client_timestamp TEXT NOT NULL,
+    last_seq BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (entity, entity_id)
+);
+CREATE TABLE sync_device_config (
+    device_id TEXT PRIMARY KEY NOT NULL,
+    key_version INTEGER,
+    trust_state TEXT NOT NULL DEFAULT 'untrusted',
+    last_bootstrap_at TEXT
+, min_snapshot_created_at TEXT);
+CREATE TABLE sync_engine_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    lock_version BIGINT NOT NULL DEFAULT 0,
+    last_push_at TEXT,
+    last_pull_at TEXT,
+    last_error TEXT,
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TEXT,
+    last_cycle_status TEXT,
+    last_cycle_duration_ms BIGINT
+);
+CREATE TABLE sync_table_state (
+    table_name TEXT PRIMARY KEY NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_snapshot_restore_at TEXT,
+    last_incremental_apply_at TEXT
+);
+CREATE TABLE sync_applied_events (
+    event_id TEXT PRIMARY KEY NOT NULL,
+    seq BIGINT NOT NULL,
+    entity TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+);
+CREATE INDEX ix_sync_applied_events_seq
+    ON sync_applied_events(seq);
+CREATE INDEX ix_sync_outbox_status_retry_created
+    ON sync_outbox(status, next_retry_at, created_at);
+CREATE INDEX ix_sync_entity_metadata_last_seq
+    ON sync_entity_metadata(entity, entity_id, last_seq);
+CREATE TABLE import_templates (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    scope TEXT NOT NULL DEFAULT 'USER',
+    kind TEXT NOT NULL DEFAULT 'CSV_ACTIVITY',
+    source_system TEXT NOT NULL DEFAULT '',
+    config_version INTEGER NOT NULL DEFAULT 1,
+    config TEXT NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE import_account_templates (
+    id TEXT PRIMARY KEY NOT NULL,
+    account_id TEXT NOT NULL,
+    context_kind TEXT NOT NULL DEFAULT 'CSV_ACTIVITY',
+    source_system TEXT NOT NULL DEFAULT '',
+    template_id TEXT NOT NULL REFERENCES import_templates(id) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (account_id, context_kind, source_system)
+);
+CREATE INDEX ix_activities_source_identity
+ON activities(source_system, account_id, source_record_id)
+WHERE source_system IS NOT NULL AND source_record_id IS NOT NULL;
+CREATE TABLE market_data_custom_providers (
+    id          TEXT    NOT NULL PRIMARY KEY,
+    code        TEXT    NOT NULL UNIQUE,
+    name        TEXT    NOT NULL,
+    description TEXT    NOT NULL DEFAULT '',
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    priority    INTEGER NOT NULL DEFAULT 50,
+    config      TEXT,
+    created_at  TEXT    NOT NULL,
+    updated_at  TEXT    NOT NULL
+);
