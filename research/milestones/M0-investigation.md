@@ -29,6 +29,8 @@
 
 ## M0.2: virattt/ai-hedge-fund
 
+> **Resolved 2026-04-21.** Pin decision and license posture are final; authoritative record is [`research/ai-hedge-fund-pin-0f6ac48.md`](../ai-hedge-fund-pin-0f6ac48.md). Consumed by M0.4 (`THIRD_PARTY.md`) and M3 (scoring-engine port). The notes below are the pre-plan investigation context.
+
 - **Latest commit SHA:** `0f6ac487986f7eb80749ed42bd26fb8330c450db`
 - **License:** README claims MIT, but **no LICENSE file exists** in the repo. GitHub API returns `license: null`.
 - **Source:** https://github.com/virattt/ai-hedge-fund
@@ -160,5 +162,5 @@ finstack-mcp is the clear primary. It covers India + US in one server with funda
 ## Open Questions (for user)
 
 1. Is Wealthfolio already installed, or should M0.1 just document the process?
-2. ai-hedge-fund has no LICENSE file despite claiming MIT — proceed noting the discrepancy?
+2. ~~ai-hedge-fund has no LICENSE file despite claiming MIT — proceed noting the discrepancy?~~ **Resolved:** proceed with the pin, capture standard MIT template with reconstructed copyright line, disclose the discrepancy in `THIRD_PARTY.md`. See [`research/ai-hedge-fund-pin-0f6ac48.md §5`](../ai-hedge-fund-pin-0f6ac48.md).
 3. MCP selection: keep all three per SPEC, or trim to finstack-mcp + nse-bse-mcp (dropping the unlicensed NseKit-MCP)?
