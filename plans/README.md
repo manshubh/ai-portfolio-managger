@@ -4,7 +4,7 @@ Technical design documents for each milestone in [`../docs/implementation.md`](.
 
 ## What lives here
 
-One subdirectory per milestone, committed *before* any implementation code is written. A plan is the answer to: *"Given the deliverables in `implementation.md §Mn` and the behavior in `SPEC.md`, how exactly are we going to build this?"*
+One subdirectory per milestone, with **one plan file per subtask**. Plans are committed *before* any implementation code is written. A plan is the answer to: *"Given the deliverable for this subtask and the behavior in `SPEC.md`, how exactly are we going to build this?"*
 
 A good plan covers:
 
@@ -21,32 +21,35 @@ Plans are **living** until the milestone closes. Once the epic is closed, the pl
 
 ## Directory layout
 
-One subdirectory per milestone, named `Mn/`. Inside, at least a `plan.md`. Additional artifacts (diagrams, scratch notes, sub-designs) live alongside as needed.
+One subdirectory per milestone, named `Mn/`. Inside, one plan file per subtask, named `Mn.x-<slug>.md` where `Mn.x` matches the bd task and `<slug>` is a short kebab-case name. Additional artifacts (diagrams, scratch notes, sub-designs) live alongside as needed.
 
 ```
 plans/
 ├── README.md                    ← you are here
 ├── M0/
-│   ├── plan.md                  ← the committed design doc
+│   ├── M0.1-wealthfolio.md      ← plan for the M0.1 bd task
+│   ├── M0.2-ai-hedge-fund-pin.md
+│   ├── ...
 │   └── <optional artifacts>     ← diagrams, tables, sub-design notes
 ├── M1/
-│   └── plan.md
+│   ├── M1.1-claim-ctl-phase2.md
+│   └── ...
 ├── ...
 └── M15/
-    └── plan.md
+    └── M15.1-....md
 ```
 
-Cross-cutting designs that span multiple milestones can sit at the top level with a descriptive kebab-case name: `plans/prompt-versioning-strategy.md`.
+Cross-cutting designs that span multiple milestones can sit at the top level with a descriptive kebab-case name: `plans/prompt-versioning-strategy.md`. A milestone that is genuinely atomic (single deliverable) can use `plans/Mn/plan.md` instead of the per-subtask naming.
 
 ## When to skip the file
 
 [`CLAUDE.md §5`](../CLAUDE.md) permits putting the plan directly in the `bd` issue (via `--design` or `--append-notes`) instead of here. Use the bd-inline form when:
 
-- The milestone is small (≤ 3 deliverables).
+- The subtask is a single deliverable with no architectural decisions.
 - The plan is short enough to fit in one `bd show` screen.
 - There's no diagram, table, or long code block that would be awkward in a bd issue body.
 
-Prefer a file in `plans/Mn/plan.md` when the plan needs review, diffing, or references from multiple bd issues.
+Prefer a file in `plans/Mn/Mn.x-<slug>.md` when the plan needs review, diffing, or references from multiple bd issues.
 
 ## Related directories
 
@@ -58,11 +61,10 @@ Prefer a file in `plans/Mn/plan.md` when the plan needs review, diffing, or refe
 ## Workflow for writing a plan
 
 ```
-1. Claim the milestone epic:   bd update <Mn-epic-id> --claim
-2. Finish R:                   research/milestones/Mn-investigation.md
-3. Draft this file:            plans/Mn/plan.md
-4. Review against SPEC:        every §Mn acceptance criterion traces to a section
-5. Decompose into tasks:       one bd child task per deliverable bullet
-6. Link tasks to the plan:     bd update <task-id> --notes "See plans/Mn/plan.md §<section>"
-7. Start implementing.
+1. Claim the subtask:          bd update <Mn.x-id> --claim
+2. Finish R (if needed):       research/milestones/Mn-investigation.md
+3. Draft this file:            plans/Mn/Mn.x-<slug>.md
+4. Review against SPEC:        every acceptance criterion traces to a section
+5. Link the plan to bd:        bd update <Mn.x-id> --notes "See plans/Mn/Mn.x-<slug>.md"
+6. Start implementing.
 ```

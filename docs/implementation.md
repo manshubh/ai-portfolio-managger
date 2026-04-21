@@ -114,7 +114,7 @@ flowchart TB
 - Local Wealthfolio install + `.schema` dump committed to `research/wealthfolio-schema-<release>.txt` for reference.
 - `skills/sql/wealthfolio-queries.sql` v1 — stub file containing the named-query skeletons listed in [SPEC §5.3](SPEC.md) with placeholder SQL that matches the dumped schema.
 - MCP registration smoke-test log (`research/mcp-smoke-test.md`) proving that finstack-mcp, NseKit-MCP, and nse-bse-mcp each return data for at least one India ticker and one US ticker from the agent's session.
-- `input/india/philosophy.md` migrated into the SPEC §7.7 shape: YAML front-matter with thresholds + sector exceptions + `personas_enabled` + `persona_rotation`, followed by the full current prose body unchanged.
+- `input/india/philosophy.md` migrated into the SPEC §7.6 shape: YAML front-matter with thresholds + sector exceptions + `personas_enabled` + `persona_rotation`, followed by the full current prose body unchanged.
 - `input/india/theses.yaml` scaffolded with the current holdings (values may be empty strings).
 - `config/wealthfolio.md` (must include clear instructions on locating the UI's SQLite file and setting up Docker volume mounts), `config/mcp-servers.md`, `config/benchmark-tickers.md` authored per SPEC §17.
 - Docker environment defined (`Dockerfile` and `docker-compose.yml`) at the repo root to containerize the Python/Shell skill layer, ensuring maximum portability without manual system dependencies.
@@ -169,11 +169,11 @@ flowchart TB
 
 **Deliverables.**
 - `skills/wealthfolio-query/query.sh` wrapping `sqlite3 -readonly`, enforcing parameterized queries via `.parameter set`.
-- All nine subcommands from SPEC §18.1: `export-snapshot`, `list-holdings`, `list-transactions-since`, `list-dividends-since`, `list-splits-since`, `get-cash-balance`, `get-net-worth`, `get-avg-cost`, `get-portfolio-twr`.
+- All six subcommands from SPEC §18.1: `export-snapshot`, `list-holdings`, `get-cash-balance`, `get-net-worth`, `get-avg-cost`, `get-portfolio-twr`. (`get-portfolio-twr` reads `daily_account_valuation` snapshots, not the `activities` table.)
 - `skills/sql/wealthfolio-queries.sql` filled in to match the pinned schema, with `-- version: <wealthfolio-release>` header.
 - `--format json|csv` support; default JSON except `export-snapshot` (CSV per SPEC §7.1.1).
 - `export-snapshot` merges `input/{market}/theses.yaml` into the `thesis` column deterministically; missing thesis is empty string, not an error (SPEC §19.13).
-- Test fixture `tests/wealthfolio-query/fixture.db` — a seeded SQLite file with 5 India + 3 US tickers covering stock + ETF + cash.
+- Test fixture `tests/wealthfolio-query/fixture.db` — a seeded SQLite file with 5 India + 3 US tickers covering stock + ETF + cash. Holdings + quotes + `daily_account_valuation` rows only; no `activities` rows (holdings-only mode).
 - `tests/wealthfolio-query/test_queries.sh` exercising every subcommand against the fixture.
 - `skills/wealthfolio-query/README.md`.
 
@@ -200,7 +200,7 @@ flowchart TB
 - Primary scorer: `skills/scoring-engine/my_philosophy.py` which calculates the overall 35/20/20/10/15 rubric scores as the exclusive source of truth for the portfolio score, reading thresholds from the philosophy YAML front-matter.
 - `skills/scoring-engine/engine.py` CLI with subcommands `check-thresholds`, `persona`, `concentration-check`, `full` per SPEC §18.3.
 - Sector-exception handling (SPEC §9.3 `exception`, `effective_threshold`, `pass_with_exception`): `it_mnc`, `psus`, `foreign_sub`, `stock_exchanges` all test-covered.
-- `banking_nbfc` scheme with its distinct threshold table (SPEC §7.7).
+- `banking_nbfc` scheme with its distinct threshold table (SPEC §7.6).
 - Fixture `tests/scoring-engine/infy.json` reproducing the §18.2 sample; test asserts the output JSON matches §9.3 field-for-field.
 - Fixture `tests/scoring-engine/hdfcbank.json` exercising `banking_nbfc` with GNPA/NNPA/CASA/NIM/ROA/CAR.
 - `skills/scoring-engine/requirements.txt` and `README.md`.
@@ -226,7 +226,7 @@ flowchart TB
 **Dependencies.** M0.
 
 **Deliverables.**
-- `skills/ledger-ctl/schema.sql` implementing SPEC §7.5 exactly (runs, actions, stock_scores, persona_assessments, report_fts virtual table, indexes).
+- `skills/ledger-ctl/schema.sql` implementing SPEC §7.4 exactly (runs, actions, stock_scores, persona_assessments, report_fts virtual table, indexes).
 - `skills/ledger-ctl/ledger_ctl.py` with subcommands `init`, `append-run`, `get-run`, `list-runs`, `search`, `export-actions` per SPEC §18.6.
 - Report parser: extracts `runs` fields (market, scope, philosophy_hash, overall_confidence, stock_count, portfolio_value, benchmark_alpha_*), one `stock_scores` row per holding, persona rows per holding-persona, and tiered `actions`.
 - Append-only enforcement — `ledger_ctl.py` rejects `UPDATE`/`DELETE` at the Python layer; no schema-level triggers (keep it simple).
@@ -235,7 +235,7 @@ flowchart TB
 - READMEs for both skills.
 
 **Acceptance Criteria.**
-- `ledger-ctl init` creates the exact schema in §7.5, including the `report_fts` virtual table with `content='runs'`, `content_rowid='id'`.
+- `ledger-ctl init` creates the exact schema in §7.4, including the `report_fts` virtual table with `content='runs'`, `content_rowid='id'`.
 - Appending a synthetic report with 10 holdings, 3 personas each, and 8 actions produces 1 `runs` row, 10 `stock_scores`, 30 `persona_assessments`, 8 `actions`, and 1 `report_fts` row.
 - `memory-query "promoter pledge"` returns the synthetic run with a non-zero relevance score.
 - Attempting `ledger-ctl update-run` (or any non-append command) is a documented error — command does not exist.
@@ -248,29 +248,24 @@ flowchart TB
 
 ### M5 — `corp-actions-monitor`
 
-**Goal.** Every Phase 1 run can surface corp-action events that exist in the market data but are not yet recorded in Wealthfolio, without ever writing to Wealthfolio.
+**Goal.** Every Phase 1 run surfaces upcoming and recent corp-action events for held tickers as an informational feed, sourced from market data only.
 
-**Dependencies.** M0 (MCP registration), M2 (`wealthfolio-query` for reading `activities`).
+**Dependencies.** M0 (MCP registration).
 
 **Deliverables.**
 - `skills/corp-actions-monitor/monitor.py` implementing SPEC §6.2 + §13 behavior.
 - NseKit-MCP primary path; Yahoo `actions` fallback marked as degraded in output.
-- Set-difference logic with ±3-day matching window per SPEC §13.2 / §13.4.
-- Classifier: `info` (upcoming), `high` (recently effective, unrecorded), `manual_review` (complex / weak automated mapping).
-- Output writer: `temp/research/warnings/corp-actions.md` in the exact format shown in SPEC §13.3.
-- Activity-type mapping table (SPEC §7.3) encoded in the skill, with mergers/rights/buybacks auto-classified `manual_review`.
-- Test fixture: synthetic Wealthfolio DB with deliberate omissions — e.g. IEX 1:1 bonus in MCP, absent from `activities`.
+- Output writer: `temp/research/warnings/corp-actions.md` in the informational format shown in SPEC §13.3 (no severity column).
 - `skills/corp-actions-monitor/README.md`.
 
 **Acceptance Criteria.**
-- The synthetic-omission fixture produces exactly one `high`-severity line citing the IEX bonus with `suggested: CREDIT + BONUS subtype`.
+- Fixture run produces a markdown table listing the seeded upcoming + past-90d events for held tickers, with source attribution and no severity column.
 - With NseKit-MCP disabled, the tool falls back to Yahoo and the output lists the degradation under a "Source degradation" note.
-- No `INSERT`/`UPDATE` ever issued against the Wealthfolio DB (verified by a read-only wrapper during tests).
-- Exit code is 0 when warnings exist; non-zero only on tool failure.
+- Tool does not open the Wealthfolio DB at all (verified by absence of any file handle on the DB path during test runs).
+- Exit code is 0 on successful scan; non-zero only on tool failure.
 
 **Risks.**
-- MCP coverage for Indian bonuses is known-weak. Mitigation: `manual_review` severity + explicit flag in output.
-- Merger/acquisition detection gap. Mitigation: those events bypass auto-mapping.
+- MCP coverage for Indian bonuses / mergers is uneven. The informational feed flags `source: Yahoo fallback` when NseKit is unavailable; the user accepts that the feed is best-effort.
 
 ---
 
@@ -284,7 +279,7 @@ flowchart TB
 - `skills/benchmark/benchmark.py` with CLI per SPEC §18.5.
 - `yfinance` wrapper for `^NSEI` and `^GSPC`; configurable benchmark tickers via `config/benchmark-tickers.md`.
 - Windows: `1w`, `1m`, `3m`, `1y`, `3y`, `inception`.
-- Portfolio TWR read from `wealthfolio-query get-portfolio-twr`; fallback to locally computed TWR from daily net-worth snapshots if Wealthfolio's TWR export is unavailable at the pinned release.
+- Portfolio TWR computed from `daily_account_valuation` snapshots via `wealthfolio-query get-portfolio-twr`. In holdings-only mode, this snapshot series is the single source of truth — no transaction-derived fallback.
 - Output JSON with alpha per window, benchmark TWR per window, portfolio TWR per window.
 - Markdown output mode that formats the §16.1 benchmark comparison table.
 - `^NSEI` labeled as **price-return** in the markdown output (SPEC §14.3).
@@ -295,10 +290,11 @@ flowchart TB
 - Fixture portfolio produces an alpha that matches the hand-computed value within 1 basis point.
 - Running twice with the same inputs produces identical output (determinism modulo Yahoo price revisions; in tests, prices are stubbed).
 - Markdown output contains the phrase "price-return (no dividend reinvestment)" adjacent to `^NSEI` rows.
+- When the requested window exceeds available snapshot history, output marks that window `insufficient_history` and the overall exit code remains 0.
 
 **Risks.**
 - Yahoo rate limits and occasional ticker outages. Mitigation: cache raw price arrays under `temp/research/` for the run so retries are free.
-- TWR source may not exist in Wealthfolio at the pinned release. Mitigation: the internal TWR fallback; flagged as medium-risk for M8 integration.
+- Portfolio TWR is derived from Wealthfolio's `daily_account_valuation` snapshots as the sole source; there is no transaction-derived fallback. When a requested window lacks sufficient snapshot history, that window degrades to `insufficient_history` rather than failing the run.
 
 ---
 
@@ -313,7 +309,7 @@ flowchart TB
 - `.agents/portfolio-research/workflows/portfolio-research.md` overview linking all phase files.
 - `.agents/portfolio-research/frameworks/{research-methodology,analysis-frameworks,concentration-framework}.md`.
 - `.agents/portfolio-research/guidelines/{rules,quality-checklist}.md`.
-- `.agents/portfolio-research/templates/{weekly-report-template,stock-analysis-template,stock-research-output-template,context-ledger-template}.md` matching SPEC §16.1 / §7.4 / §7.6.
+- `.agents/portfolio-research/templates/{weekly-report-template,stock-analysis-template,stock-research-output-template,context-ledger-template}.md` matching SPEC §16.1 / §7.3 / §7.5.
 - `.agents/personas/my-philosophy.md` (generated from `input/india/philosophy.md` front-matter + prose), `jhunjhunwala.md`, `buffett.md`, `munger.md`, `pabrai.md`, plus `graham.md`, `fisher.md`, `damodaran.md`, `lynch.md` (enabled opt-in per SPEC §8.3). Each persona file follows the 5-section shape in SPEC §8.2.
 - `.agents/personas/README.md`.
 - `.agents/debate/bull.md` and `.agents/debate/bear.md` with variables `{ticker}`, `{score}`, `{persona_verdicts}`, `{current_price}`, `{avg_cost}`, `{allocation_pct}`, `{fund_block}`, `{valu_block}`, `{biz_block}`, `{news_block}`, `{concentration_note}` per SPEC §11.4. Templates explicitly forbid fabrication and encode the 2-round cap + no-new-facts-round-2 rule.
@@ -339,14 +335,14 @@ flowchart TB
 **Dependencies.** M2, M4, M5, M7.
 
 **Deliverables.**
-- `.agents/portfolio-research/phases/phase-1-setup.md` filled out with the 11 steps from SPEC §10.2.
+- `.agents/portfolio-research/phases/phase-1-setup.md` filled out with the 10 steps from SPEC §10.2.
 - Preflight check step that verifies (a) Wealthfolio DB path, (b) schema version matches the pinned SQL file, (c) Wealthfolio has refreshed quotes (if the pinned release exposes a way to check; otherwise surface a user reminder).
 - Manifest template `temp/research/manifest.md` populated with: snapshot summary, philosophy summary, thesis coverage (% tickers with non-empty thesis), prior-run highlights (top 3 from `memory-query`), warning summary.
 - `scope_value` validation against active Wealthfolio accounts / account groups (SPEC §10.2 step 2).
 - `tests/e2e/phase1.sh` — runs `/phase1` against the M2 fixture Wealthfolio DB and asserts every required artifact exists.
 
 **Acceptance Criteria.**
-- After a clean `rm -rf temp/research && /phase1 market=india scope_type=market scope_value=india`, these files exist: `portfolio-snapshot.csv`, `transactions-snapshot.csv`, `warnings/corp-actions.md`, `manifest.md`, and `claims/{TICKER}/` for every snapshot row.
+- After a clean `rm -rf temp/research && /phase1 market=india scope_type=market scope_value=india`, these files exist: `portfolio-snapshot.csv`, `warnings/corp-actions.md`, `manifest.md`, and `claims/{TICKER}/` for every snapshot row.
 - Snapshot CSV column headers match SPEC §7.1.1 exactly.
 - Re-running `/phase1` without cleaning `temp/research/` produces a clear error ("previous run artifacts present — clean or continue explicitly"), not a silent overwrite.
 - Snapshot-freeze invariant: intentionally mutating `portfolio-snapshot.csv` after Phase 1 produces a `tests/invariants/snapshot-frozen.sh` violation that later phases must detect.
@@ -472,7 +468,7 @@ flowchart TB
 - JSON-first logging mechanism: The phase produces a structured `report_data.json` describing the analysis (runs, scores, personas, actions) which `ledger-ctl` securely ingests, safeguarding against Markdown parsing fragility.
 - A deterministic script mechanically concatenates the LLM-synthesized executive summary and action plan with the uncut, raw `[Tag]` data of every portfolio holding to render `.reports/{market}/YYYY-MM-DD-weekly-report.md` for human review without data loss.
 - `philosophy_hash` computed as `sha256(philosophy.md)` and stored in `runs.philosophy_hash`; Phase 1 (M8) reads this on the next run and surfaces "philosophy changed — confirm re-baselining" to the user (SPEC §19.20).
-- Context-ledger writer: `context/{market}/last-run.md` rotation (current → `last-run-backup.md`, then write new) per SPEC §7.6.
+- Context-ledger writer: `context/{market}/last-run.md` rotation (current → `last-run-backup.md`, then write new) per SPEC §7.5.
 - Optional cleanup prompt for `temp/research/` (not required).
 - `tests/e2e/phase7.sh` — runs Phase 7 against a synthetic Phase 6 output; asserts the report file exists, the ledger row counts match §16.2 expectations, the context ledger is ≤ 100 lines, and the previous context was backed up.
 

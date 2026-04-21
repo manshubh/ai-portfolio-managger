@@ -64,7 +64,7 @@ The system is opinionated. These principles supersede individual feature decisio
 1. **Local-first, zero-subscription core.** All state lives on the user's machine. No cloud service is required to run the system. Wealthfolio Connect and any paid LLM subscriptions are optional.
 2. **Cursor/Claude is the agent.** The LLM runtime is the IDE. Skills are deterministic tools the agent invokes. We never write code that calls an LLM API.
 3. **Public OSS over reimplementation.** If a mature public project does the job (tracker, MCP for market data, scoring logic), we adopt it with attribution. Rebuilds require explicit justification.
-4. **Filesystem is the message bus.** Inter-phase communication happens through files in `temp/research/` and the ledger DB. Phase 1 freezes portfolio-state inputs into local artifacts (`portfolio-snapshot.csv`, recent-transactions snapshot, warnings) that later phases must treat as authoritative for holdings state. No in-memory state persists between agent sessions. Inherited from current.md §8.
+4. **Filesystem is the message bus.** Inter-phase communication happens through files in `temp/research/` and the ledger DB. Phase 1 freezes portfolio-state inputs into local artifacts (`portfolio-snapshot.csv`, warnings) that later phases must treat as authoritative for holdings state. No in-memory state persists between agent sessions. Inherited from current.md §8.
 5. **Fundamentals-first, valuation second.** Valuation alone cannot push a stock below "Conviction Hold". An expensive but fundamentally sound stock remains a hold. Inherited from current.md §6.
 6. **Deterministic where possible, LLM where necessary.** Numbers, thresholds, pass/fail checks, SQL queries, attribution math — deterministic code. Synthesis, persona reasoning, debate — LLM. The scoring engine is pure math; the `[AI]` synthesis line is LLM.
 7. **Claim-based parallelism, no orchestrator.** Phases 2, 4, 5 shard across concurrent Cursor sessions via atomic `noclobber` file locks. Batch size is user-configurable; each session claims one batch, processes it, stops. Inherited from current.md §8.
@@ -187,7 +187,7 @@ flowchart TB
 - **Ledger SQLite (FTS5)** — append-only history of weekly runs; indexed for full-text search.
 - **`input/{market}/philosophy.md`** — user-authored philosophy, source of truth for scoring thresholds and exit rules.
 - **`input/{market}/theses.yaml`** — per-market, per-ticker thesis sidecar; merged into the Phase 1 snapshot and treated as analysis input.
-- **`temp/research/portfolio-snapshot.csv` + other Phase 1 artifacts** — frozen run inputs for holdings state, recent transactions, and warnings.
+- **`temp/research/portfolio-snapshot.csv` + other Phase 1 artifacts** — frozen run inputs for holdings state and warnings.
 - **`reports/{market}/YYYY-MM-DD-weekly-report.md`** — final output per run, human-readable.
 - **`temp/research/`** — scratch space per run; per-stock `[Tag]` files, manifest, claim locks, portfolio-analysis.md. It is disposable and may be cleaned between runs; manual cleanup is acceptable in the rare case of multiple same-day runs.
 
@@ -218,6 +218,8 @@ flowchart TB
 
 Wealthfolio is the chosen tracker because it already provides the mechanics this system depends on: transaction accounting, corporate-action handling, portfolio visualization, and a local SQLite database the agent can read safely. The spec assumes we build around Wealthfolio rather than maintaining a parallel custom tracker.
 
+**Maintenance mode (holdings-only).** The user maintains current positions and per-lot cost basis in Wealthfolio. The agent does not require the `activities` table (transactions, dividends, corporate-action entries) to be populated and does not read from it. Any feature that would have relied on recorded activities is either removed from scope or sourced from `daily_account_valuation` snapshots instead.
+
 ### 5.2.1 Documenting Wealthfolio for Users
 
 To ensure anyone picking up this repo can easily run it, `config/wealthfolio.md` serves as the primary onboarding document for the tracker. It must clearly outline:
@@ -230,15 +232,12 @@ To ensure anyone picking up this repo can easily run it, `config/wealthfolio.md`
 - **Reads**: via direct SQL queries against Wealthfolio's SQLite DB. Queries live in `skills/sql/wealthfolio-queries.sql` and are versioned alongside the installed Wealthfolio release. Typical queries:
   - `export-snapshot(scope)` → normalized CSV rows for the chosen run scope, including thesis merge
   - `list-holdings` → `(symbol, currency, quantity, avg_cost, current_price, market_value, allocation_pct)`
-  - `list-transactions-since(date, scope)` → ordered activity list
-  - `list-dividends-since(date, ticker)` → dividend cashflows
-  - `list-splits-since(date, ticker)` → SPLIT activities
   - `get-cash-balance(currency, scope)` → available cash within the selected run scope
   - `get-net-worth(date)` → total portfolio value at date (Wealthfolio has time-travel data)
-- **Writes**: the agent **never writes** to Wealthfolio's DB. New transactions flow through:
+- **Writes**: the agent **never writes** to Wealthfolio's DB. New positions flow through:
   1. User manual entry in Wealthfolio UI (for individual trades).
   2. Broker CSV export → Wealthfolio CSV import wizard (for batch imports; Wealthfolio saves per-broker column mappings).
-  3. For corp-action events flagged by `corp-actions-monitor` (§13), the agent writes a warning file with suggested Wealthfolio activity mappings; user reviews and records them manually in Wealthfolio. **Agent does not write the DB directly.**
+  3. For corp-action events surfaced by `corp-actions-monitor` (§13), the agent writes an informational digest; the user decides whether any action is needed. **Agent does not write the DB directly.**
 
 ### 5.4 Run-entry export model
 
@@ -271,7 +270,7 @@ All skills are deterministic code (no LLM calls). Each has: purpose, OSS source,
 - **Secondary**: [Prasad1612/NseKit-MCP](https://github.com/Prasad1612/NseKit-MCP) — 100+ NSE tools; used primarily for corp-actions and FII/DII.
 - **Tertiary**: [bshada/nse-bse-mcp](https://github.com/bshada/nse-bse-mcp) — 60 tools (TypeScript, MIT) for live quotes + document download (filings, IPO prospectus).
 - **Invocation**: MCP tool calls from the Cursor/Claude agent session. The user registers these MCP servers in their Cursor/Claude config.
-- **Output contract**: normalized JSON matching the `[Fund]` schema defined in §7.4.
+- **Output contract**: normalized JSON matching the `[Fund]` schema defined in §7.3.
 - **Failure modes**:
   - MCP server returns partial data → agent marks missing fields as `N/A`.
   - All MCPs fail for a ticker → agent falls back to web search (Tier-3 in §15).
@@ -281,13 +280,11 @@ All skills are deterministic code (no LLM calls). Each has: purpose, OSS source,
 
 - **Source**: NseKit-MCP `corporate_events` tool (India), Yahoo Finance (US).
 - **Behavior**:
-  1. Loads held tickers from `temp/research/portfolio-snapshot.csv` (preferred) or `wealthfolio-query list-holdings`.
-  2. Queries upcoming + past-90-day corp actions per ticker.
-  3. Loads recorded activities from Wealthfolio's `activities` table for the same period.
-  4. Computes set-difference to find events **not yet recorded in Wealthfolio**.
-  5. Classifies each event as `info` (upcoming), `high` (recently effective and still unrecorded), or `manual_review` (complex action with weak automated mapping).
-  6. Emits a dedicated warning file: `temp/research/warnings/corp-actions.md` listing `(ticker, date, event_type, severity, suggested_wealthfolio_activity, note)`.
-- **Never writes** to Wealthfolio's DB.
+  1. Loads held tickers from `temp/research/portfolio-snapshot.csv`.
+  2. Queries upcoming (+14d) and recent (−90d) corp actions per ticker from NseKit-MCP (India) / Yahoo (US).
+  3. Writes `temp/research/warnings/corp-actions.md` as an **informational digest**: `(ticker, date, event_type, source, note)`.
+  4. Never writes to Wealthfolio's DB and never reads the `activities` table.
+- **No severity classification.** Every event is informational. In holdings-only mode there is no recorded-activity baseline to diff against, so the reconciliation / severity ladder (`info`/`high`/`manual_review`) is out of scope.
 - **Failure modes**: if NseKit-MCP is down, falls back to Yahoo `actions` endpoint (covers splits + dividends but not bonuses well for India). Flags the degradation in output.
 
 ### 6.3 `scoring-engine` (ported from ai-hedge-fund)
@@ -312,7 +309,7 @@ All skills are deterministic code (no LLM calls). Each has: purpose, OSS source,
 
 - **Thin wrapper** around `sqlite3` CLI.
 - **Operations**: `init`, `append-run`, `get-run(id)`, `list-runs(market, limit)`, `search(query, market)`.
-- **Schema**: see §7.5.
+- **Schema**: see §7.4.
 - **No LLM**. Append-only; no updates or deletes (historical immutability).
 
 ### 6.6 `memory-query`
@@ -341,12 +338,10 @@ Default batch size is 10, but Phase 2 / 4 / 5 batch size is explicitly user-conf
 - **Sub-commands** (named, not free-form SQL):
   - `export-snapshot --market <india|us> --scope-type <market|account_group|account> --scope-value <value> [--theses <path>] [--output <csv>]`
   - `list-holdings [--market <IN|US>] [--scope-type ...] [--scope-value ...]`
-  - `list-transactions-since <YYYY-MM-DD> [--market <IN|US>] [--scope-type ...] [--scope-value ...]`
-  - `list-dividends-since <YYYY-MM-DD> [--ticker <T>]`
-  - `list-splits-since <YYYY-MM-DD> [--ticker <T>]`
   - `get-cash-balance [--currency <INR|USD>] [--scope-type ...] [--scope-value ...]`
   - `get-net-worth [--date <YYYY-MM-DD>]`
   - `get-avg-cost <ticker>`
+  - `get-portfolio-twr --market <india|us> --start <date> --end <date>` (reads `daily_account_valuation` snapshots; independent of the `activities` table)
 - **Read-only**. Uses `sqlite3 -readonly` mode.
 - **Output**: JSON rows by default; CSV available via `--format csv`. `export-snapshot` writes the normalized Phase 1 snapshot schema from §7.1.1 and may echo preview rows to stdout for user review.
 
@@ -359,12 +354,12 @@ Default batch size is 10, but Phase 2 / 4 / 5 batch size is explicitly user-conf
 Seven local data stores/artifacts, using SQLite, markdown, YAML, and CSV:
 
 1. **Wealthfolio DB** — external, read-only for us. Schema pinned in §5.6.
-2. **Ledger DB** — our append-only history. Schema in §7.5.
+2. **Ledger DB** — our append-only history. Schema in §7.4.
 3. **`philosophy.md`** — user-authored, markdown with optional YAML front-matter for thresholds.
 4. **`theses.yaml`** — per-market, per-ticker thesis sidecar. Schema in §7.1.2.
 5. **`portfolio-snapshot.csv`** — frozen Phase 1 holdings snapshot for the run. Schema in §7.1.1.
-6. **`[Tag]` stock file** — per-stock research artifact. Schema in §7.4.
-7. **Context ledger** — `context/{market}/last-run.md`; bounded markdown. Schema in §7.6.
+6. **`[Tag]` stock file** — per-stock research artifact. Schema in §7.3.
+7. **Context ledger** — `context/{market}/last-run.md`; bounded markdown. Schema in §7.5.
 
 #### 7.1.1 Normalized run snapshot CSV
 
@@ -410,24 +405,7 @@ theses:
 
 The implementation reads a small, versioned subset of Wealthfolio's schema through named queries in `skills/sql/wealthfolio-queries.sql`. The spec does not treat table and view names as normative; the query file is the compatibility layer and must be updated deliberately whenever the installed Wealthfolio release changes.
 
-### 7.3 Activity-type mapping (philosophy → Wealthfolio)
-
-When `corp-actions-monitor` suggests a Wealthfolio entry, it uses these mappings:
-
-| Corp action | Wealthfolio activity type | Subtype |
-|---|---|---|
-| Stock split | `SPLIT` | — |
-| Reverse split | `SPLIT` | — (ratio < 1) |
-| Bonus shares (India 1:1, 1:2 etc.) | `CREDIT` or `ADD_HOLDING` | `BONUS` (if CREDIT) |
-| Cash dividend | `DIVIDEND` | — |
-| Stock dividend / spinoff | `DIVIDEND` | `Dividend in Kind` |
-| DRIP (dividend reinvestment) | `DIVIDEND` | `DRIP` |
-| Rights issue | `BUY` (user exercises) or `ADD_HOLDING` | — |
-| Merger (stock-for-stock) | `REMOVE_HOLDING` + `ADD_HOLDING` | — |
-| Capital reduction | `CREDIT` | — |
-| Buyback (tendered) | `SELL` | — |
-
-### 7.4 `[Tag]` stock file schema
+### 7.3 `[Tag]` stock file schema
 
 Each stock's research file at `temp/research/stocks/{TICKER}.md` uses a dense, one-line-per-tag format. Inherited from current.md §5.1 with extensions.
 
@@ -480,7 +458,7 @@ Hard rules (inherited from current.md §5.1, kept): no markdown tables in data b
 
 Snapshot-derived portfolio fields (`quantity`, `avg_cost`, `snapshot_price`, `snapshot_market_value`, `allocation_pct`, `unrealized_pl_pct`, `thesis`) must come from `portfolio-snapshot.csv` and remain stable for the duration of the run. If later phases fetch fresher live market context, they add it to the stock file without rewriting the frozen snapshot baseline.
 
-### 7.5 Ledger DB schema (SQLite FTS5)
+### 7.4 Ledger DB schema (SQLite FTS5)
 
 ```sql
 -- one row per weekly run
@@ -555,7 +533,7 @@ CREATE INDEX idx_persona_ticker ON persona_assessments(ticker, run_id);
 CREATE INDEX idx_runs_market_date ON runs(market, run_date);
 ```
 
-### 7.6 Context ledger (short-form) schema
+### 7.5 Context ledger (short-form) schema
 
 `context/{market}/last-run.md` — ≤100 lines, overwritten each run (previous copied to `last-run-backup.md` first). Inherited from current.md §4.3 with minor schema tweaks:
 
@@ -594,7 +572,7 @@ CREATE INDEX idx_runs_market_date ON runs(market, run_date);
 - Top gaps: …
 ```
 
-### 7.7 Philosophy file schema
+### 7.6 Philosophy file schema
 
 `input/{market}/philosophy.md` has two parts:
 
@@ -673,7 +651,7 @@ The India philosophy from current.md is retained and extended with the YAML fron
 1. A brief "identity" paragraph (who this investor was/is, their style).
 2. The specific **thresholds** this persona cares about (numerical).
 3. The **weighting** of sub-criteria (e.g. Jhunjhunwala: 40% management quality, 30% secular growth, 20% valuation, 10% technical).
-4. The **output format** the persona must emit (action + 1-line rationale, matching §7.4 Persona Cross-Check block).
+4. The **output format** the persona must emit (action + 1-line rationale, matching §7.3 Persona Cross-Check block).
 5. **Deterministic base scoring** via `scoring-engine` CLI calls — the persona prompt says "first run `scoring-engine {persona}` and incorporate the output". This keeps the threshold math deterministic while the narrative comes from the LLM.
 
 ### 8.3 Persona roster (MVP default)
@@ -881,13 +859,12 @@ Seven phases, sharded for parallelism where expensive.
 4. Read `input/{market}/theses.yaml` if present. Missing file is allowed and means all thesis values default empty.
 5. `wealthfolio-query export-snapshot --market {market} --scope-type {scope_type} --scope-value {scope_value} --theses input/{market}/theses.yaml --output temp/research/portfolio-snapshot.csv` → frozen holdings snapshot. The command should also print or preview the exported rows for user review, but there is no mandatory confirmation gate.
 6. `wealthfolio-query get-cash-balance --currency {market_currency} --scope-type {scope_type} --scope-value {scope_value}` → available cash within the selected scope.
-7. `wealthfolio-query list-transactions-since <90 days ago> --market {market} --scope-type {scope_type} --scope-value {scope_value}` → recent activity, then write `temp/research/transactions-snapshot.csv`.
-8. `corp-actions-monitor --market {market} --snapshot temp/research/portfolio-snapshot.csv` → emits `temp/research/warnings/corp-actions.md`. Phase 1 continues even when warnings exist.
-9. `memory-query` last 4 weekly runs (prefer same market + same scope when available) + `context/{market}/last-run.md`.
-10. Compose `temp/research/manifest.md` — snapshot summary + philosophy summary + thesis coverage + prior-run highlights + warning summary.
-11. `claim-ctl init` for Phase 2 (creates `temp/research/claims/{TICKER}/` for each holding in `portfolio-snapshot.csv`).
+7. `corp-actions-monitor --market {market} --snapshot temp/research/portfolio-snapshot.csv` → emits `temp/research/warnings/corp-actions.md`. Phase 1 continues even when warnings exist.
+8. `memory-query` last 4 weekly runs (prefer same market + same scope when available) + `context/{market}/last-run.md`.
+9. Compose `temp/research/manifest.md` — snapshot summary + philosophy summary + thesis coverage + prior-run highlights + warning summary.
+10. `claim-ctl init` for Phase 2 (creates `temp/research/claims/{TICKER}/` for each holding in `portfolio-snapshot.csv`).
 
-**Output**: `temp/research/portfolio-snapshot.csv`, `temp/research/transactions-snapshot.csv`, `temp/research/warnings/corp-actions.md`, `temp/research/manifest.md`, Phase 2 claim directories.
+**Output**: `temp/research/portfolio-snapshot.csv`, `temp/research/warnings/corp-actions.md`, `temp/research/manifest.md`, Phase 2 claim directories.
 
 **Stop condition**: agent stops after writing the manifest. User starts Phase 2 in a new session.
 
@@ -991,7 +968,7 @@ Skippable in normal user-initiated runs; useful when a stricter QA pass is desir
 1. Assemble `reports/india/YYYY-MM-DD-weekly-report.md` per §16.1 template.
 2. `ledger-ctl append-run` with the full report content, score table, actions, persona assessments.
 3. Copy `context/india/last-run.md` → `context/india/last-run-backup.md`.
-4. Write new `context/india/last-run.md` per §7.6 schema.
+4. Write new `context/india/last-run.md` per §7.5 schema.
 5. Optionally clean `temp/research/` (agent prompts user to confirm). Manual cleanup is acceptable; MVP does not archive all intermediate artifacts per run.
 
 **Output**: final report file, ledger DB updated, context ledger updated.
@@ -1039,7 +1016,7 @@ Templates explicitly forbid fabrication ("cite only numbers from the stock file"
 
 ### 11.5 Debate output
 
-Appended as `## Debate` section in the `[Tag]` stock file per §7.4 format. The resolution verb updates the `Action:` line in `## Scoring` if it differs (with a `Notes:` annotation recording the debate-driven change).
+Appended as `## Debate` section in the `[Tag]` stock file per §7.3 format. The resolution verb updates the `Action:` line in `## Scoring` if it differs (with a `Notes:` annotation recording the debate-driven change).
 
 ### 11.6 Debate invariants
 
@@ -1056,7 +1033,7 @@ Two layers of memory, different time horizons.
 
 ### 12.1 Short-term context (rolling, ≤100 lines)
 
-- **File**: `context/{market}/last-run.md` — §7.6 schema.
+- **File**: `context/{market}/last-run.md` — §7.5 schema.
 - **Lifespan**: overwritten each run; previous copied to `last-run-backup.md`.
 - **Read by**: Phase 1 (every run).
 - **Written by**: Phase 7.
@@ -1064,7 +1041,7 @@ Two layers of memory, different time horizons.
 
 ### 12.2 Long-term ledger (append-only, all history)
 
-- **File**: `ledger.db` (SQLite with FTS5) — §7.5 schema.
+- **File**: `ledger.db` (SQLite with FTS5) — §7.4 schema.
 - **Lifespan**: append-only, never deleted.
 - **Read by**: Phase 1 (for 1–3 month lookback), Phase 6 (for historical persona patterns), ad-hoc `memory-query`.
 - **Written by**: Phase 7 exclusively.
@@ -1086,47 +1063,30 @@ Two layers of memory, different time horizons.
 
 ## 13. Corporate Actions Monitoring
 
-### 13.1 Decision: read-only monitoring, Wealthfolio owns mechanics
+### 13.1 Decision: informational monitoring, no reconciliation
 
-Wealthfolio natively handles all corporate-action mechanics (§7.3): SPLIT adjusts qty + per-share cost, DIVIDEND with DRIP auto-creates a BUY, CREDIT-BONUS records bonus-share capital, Dividend-in-Kind records spinoffs. Our system does not re-implement any of it.
-
-We only add a **monitoring skill** that detects events the user hasn't yet recorded.
+In holdings-only mode, the agent does not reconcile market corp-action events against recorded activities (the `activities` table is empty by design). `corp-actions-monitor` is an **informational feed** only: it surfaces upcoming and recent events per held ticker so the user is aware. The user decides what (if anything) to act on; Wealthfolio's holdings-only maintenance model does not require logging corp-action entries.
 
 ### 13.2 `corp-actions-monitor` behavior
 
-Detailed in §6.2. Summary:
-
-1. Query NseKit-MCP (India) / Yahoo (US) for `(ticker, date, event_type)` in the last 90 days and next 14 days for every held ticker.
-2. Query Wealthfolio `activities` table for matching events (same ticker, within ±3 days of the reported event date, matching activity_type per §7.3 mapping).
-3. Set difference → unrecorded events.
-4. Classify each event into:
-   - `info` — upcoming event, informational only.
-   - `high` — recently effective and still unrecorded; likely to distort holdings, cost basis, or P/L interpretation.
-   - `manual_review` — complex action where automated mapping is weak.
-5. Emit `temp/research/warnings/corp-actions.md`.
+See §6.2.
 
 ### 13.3 UX flow
 
-Phase 1 runs `corp-actions-monitor`. If warnings exist, Phase 1 continues and carries the warning file forward into the run:
+Phase 1 runs `corp-actions-monitor`. Output is an informational block carried into the run manifest — no gates, no blocking, no severity escalation:
 
 ```
-Corporate actions warning:
+Corporate actions (informational):
 
-  info         | INFY   | 2025-11-15 | DIVIDEND | Rs 18/share interim dividend  | suggested: DIVIDEND
-  high         | IEX    | 2025-11-22 | BONUS    | 1:1 bonus share issue         | suggested: CREDIT + BONUS subtype
-  manual_review| APOLLO | 2025-12-01 | MERGER   | stock-for-stock merger        | note: verify manually
-
-Please review and record any relevant items in Wealthfolio. Analysis may proceed, but
-affected holdings should carry lower confidence until the tracker is updated.
+  INFY   | 2026-04-30 (upcoming) | DIVIDEND | Rs 18/share interim
+  IEX    | 2026-02-10 (past)     | BONUS    | 1:1 bonus share issue
+  APOLLO | 2026-01-15 (past)     | MERGER   | stock-for-stock merger
 ```
-
-This keeps the tracker authoritative without forcing a blocking gate. Upcoming events are informational; recently effective but unrecorded actions are high-severity because stale cost basis can propagate into wrong `[Overview]` P/L figures and misleading comparisons.
 
 ### 13.4 Failure modes
 
 - **NseKit-MCP down**: fall back to Yahoo `actions` (good for splits + cash dividends, weak for India bonuses). Output marks the degradation.
-- **False positives** (event exists in MCP but Wealthfolio record uses slightly different date): 3-day matching window tolerates minor date skew. User can manually confirm.
-- **Mergers / acquisitions**: MCPs' coverage is weak. Output flags these as "please research manually" rather than suggesting an automated mapping.
+- **Mergers / acquisitions**: MCPs' coverage is weak. Output flags these as "please research manually" so the user can verify via filings.
 
 ---
 
@@ -1139,7 +1099,7 @@ The user's India philosophy explicitly targets "beat Nifty 50 by 3–5% annually
 ### 14.2 Alpha per window
 
 - **Benchmarks**: `^NSEI` (Nifty 50) for India, `^GSPC` (S&P 500) for US, configurable per market.
-- **Portfolio return**: Time-Weighted Return (TWR) computed from Wealthfolio's time-travel data. Wealthfolio natively supports TWR per the FAQ; the benchmark skill reads it or computes it from daily net-worth snapshots.
+- **Portfolio return**: Time-Weighted Return (TWR) computed from `daily_account_valuation` snapshots (Wealthfolio populates this table daily from `quantity × price`, independent of the `activities` table). Long windows produce meaningful alpha only after sufficient snapshot history has accumulated; for windows exceeding available history, `benchmark` emits `insufficient_history` and marks the window `N/A` rather than failing.
 - **Windows**: 1w, 1m, 3m, 1y, 3y, since-inception.
 - **Output**: a single-number alpha per window, included in weekly report §16.1 and stored in `runs.benchmark_alpha_{window}`.
 
@@ -1150,7 +1110,7 @@ The user's India philosophy explicitly targets "beat Nifty 50 by 3–5% annually
 
 ### 14.4 Wealthfolio's built-in benchmarking
 
-Wealthfolio has a "Beat the Market?" view that natively compares account performance to S&P 500 or any configurable ETF. For MVP, this is the primary user-visible benchmark (visual). Our `benchmark` skill produces the same numbers programmatically for inclusion in the weekly report and ledger.
+Wealthfolio has a "Beat the Market?" view that natively compares account performance to S&P 500 or any configurable ETF. For MVP, this is the primary user-visible benchmark (visual). Our `benchmark` skill produces alpha numbers programmatically from `daily_account_valuation` snapshots for inclusion in the weekly report and ledger; Wealthfolio's native benchmark is transaction-derived and will differ.
 
 ---
 
@@ -1312,7 +1272,7 @@ ETF rows keep the same broad report skeleton, but their `[Fund]`, `[Valu]`, and 
 
 ### 16.2 Ledger DB row schema
 
-Per §7.5. Key rows written per run:
+Per §7.4. Key rows written per run:
 
 1. One `runs` row.
 2. N `stock_scores` rows (one per holding).
@@ -1322,11 +1282,11 @@ Per §7.5. Key rows written per run:
 
 ### 16.3 Context ledger
 
-Per §7.6. Rewritten each run.
+Per §7.5. Rewritten each run.
 
 ### 16.4 Per-stock research file
 
-Per §7.4. One file per holding per run, at `temp/research/stocks/{TICKER}.md`. Cleaned between runs (optional; agent prompts).
+Per §7.3. One file per holding per run, at `temp/research/stocks/{TICKER}.md`. Cleaned between runs (optional; agent prompts).
 
 ### 16.5 Portfolio analysis (intermediate)
 
@@ -1477,7 +1437,6 @@ ai-portfolio-manager/
 │
 └── temp/research/                            # Per-run scratch; cleaned between runs
     ├── portfolio-snapshot.csv
-    ├── transactions-snapshot.csv
     ├── manifest.md
     ├── warnings/corp-actions.md
     ├── stocks/{TICKER}.md
@@ -1509,9 +1468,6 @@ wealthfolio-query export-snapshot \
   → CSV matching §7.1.1, with thesis column populated
 
 wealthfolio-query list-holdings [--market india|us|all] [--scope-type ...] [--scope-value ...] [--format json|csv]
-wealthfolio-query list-transactions-since <YYYY-MM-DD> [--market ...] [--scope-type ...] [--scope-value ...] [--ticker <T>] [--format ...]
-wealthfolio-query list-dividends-since <YYYY-MM-DD> [--ticker <T>]
-wealthfolio-query list-splits-since <YYYY-MM-DD> [--ticker <T>]
 wealthfolio-query get-cash-balance [--currency INR|USD|all] [--scope-type ...] [--scope-value ...]
 wealthfolio-query get-net-worth [--date <YYYY-MM-DD>] [--currency INR|USD]
 wealthfolio-query get-avg-cost <ticker>
@@ -1604,9 +1560,8 @@ corp-actions-monitor \
   --snapshot temp/research/portfolio-snapshot.csv \
   --lookback-days 90 \
   --lookahead-days 14 \
-  --wealthfolio-db <path> \
   [--output-markdown temp/research/warnings/corp-actions.md]
-  → exit 0 on successful scan; warnings are written to markdown, non-zero only on tool failure
+  → exit 0 on successful scan; informational output only, non-zero only on tool failure
 ```
 
 ### 18.5 `benchmark`
@@ -1691,7 +1646,7 @@ All 10 invariants from current.md §9 are retained. New ones added for persisten
 15. **Deterministic math, LLM narrative.** Scoring thresholds, HHI, correlation, alpha, and persona sub-scores are computed by `scoring-engine`. The LLM writes rationale strings that reference those computed values, never re-derives them.
 16. **Personas always include `my-philosophy`.** The user's own philosophy is the authoritative voice; rotating personas are sparring partners.
 17. **Debate is selective.** Universal debate is forbidden; trigger rules (§11.2) are mandatory.
-18. **Corp-actions warnings are non-blocking but visible.** Phase 1 always emits the warning artifact when relevant. High-severity unrecorded events must lower confidence and be surfaced in the report.
+18. **Corp-actions feed is informational and non-blocking.** Phase 1 always emits the informational digest when upcoming or recent events exist for held tickers. No severity classification — in holdings-only mode there is no recorded-activity baseline to reconcile against.
 19. **Ledger is append-only.** Rows never updated or deleted; only appended. Historical immutability.
 20. **Philosophy hash tracked per run.** Change in philosophy between runs is flagged; the user is prompted to confirm re-baselining.
 21. **MCP staleness triggers fallback.** If an MCP's data is older than the ticker's last earnings release, the agent uses Tier B (direct fetch) before accepting.
