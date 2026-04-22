@@ -20,7 +20,7 @@ Servers **not selected** (considered and rejected at M0.3 investigation time, [`
 
 - None. All three candidates from the original investigation are kept. Redundancy is accepted at the server level because each fills a tool-level niche the others do not.
 
-Note: `nsekit-mcp` exposes ~116 tools and `finstack-mcp` ~93; this project calls **9 tools total** (6 on finstack, 2 on nsekit, 1 on nse-bse). Future phases may add more as needs emerge — new tool usage must be added to §2 below before it enters a skill.
+Note: `nsekit-mcp` exposes 117 tools, `finstack-mcp` 95, and `nse-bse-mcp` 59 (271 total surface); this project calls **9 tools total** (6 on finstack, 2 on nsekit, 1 on nse-bse) — a 3.3% utilization of the combined tool surface. Future phases may add more as needs emerge — new tool usage must be added to §2 below before it enters a skill. See §4 for the context-cost budget that this utilization implies and the stay/go signal per server.
 
 ## 2. Tool authority matrix (SPEC §18.2 + §6.2)
 
@@ -75,7 +75,38 @@ One row per discovered issue. Severity: `high` (blocks a specific downstream mil
 | G8 | us | `key_ratios` | finstack | MSFT | `dividend_rate`, `dividend_yield`, `payout_ratio`, `ex_dividend_date` all null despite MSFT paying a dividend. AAPL and JPM populate correctly. | low | M9 aggregator | [`ai-portfolio-manager-ine`](../.beads/) | Per-ticker: fall back to Yahoo `info.dividendRate` / `info.dividendYield` when finstack's dividend block is null. This is the happy path of the SPEC §18.2 `missing_fields[]` + `sources[]` normalization. |
 | G9 | us | `sec_filing` | finstack | JPM (and possibly other large banks — untested) | `count=5` returned `count=1` on 10-K and `count=3` on 10-Q. Latest filing IS returned; historical back-fill is not. AAPL and MSFT unaffected. | medium | M9 (multi-year 10-K diff) | [`ai-portfolio-manager-8df`](../.beads/) | M9 Phase 2 US Tier-1 **latest-filing flow is not blocked** (latest 10-K/10-Q is returned). For multi-year diffing, M9 falls back to a direct EDGAR `browse-edgar?CIK=<cik>&type=10-K` call to enumerate prior filings when `response.count < count_arg`. |
 
-## 4. Consumer pointers
+## 4. Context cost per MCP (selection factor)
+
+Context cost was not considered at M0.3 selection time but is a first-class factor for keeping a server on the authority list. Cursor mounts these MCPs under the **FileSystem model** — tool descriptors live at `~/.cursor/projects/Users-mrihal-workspace-ai-portfolio-manager/mcps/<server>/tools/*.json` and are read on demand, not injected into the system prompt. That is the session we actually run in. But a project that wants to stay portable must also bound the **classic-mode injection cost** — the surface that would land in the system prompt if the same `.mcp.json` were consumed by Claude Desktop, LangChain's MCP adapter, or any client that auto-registers every tool at startup.
+
+Measurements taken 2026-04-22 by `wc -c` over the descriptor files Cursor's MCP FileSystem writes after discovery (`~/.cursor/projects/.../mcps/<server>/tools/`):
+
+| MCP | Tools on server | Tools actually called | Total descriptor surface | Avg chars / tool | Sum of USED-tool descriptors | Classic-mode injection cost¹ |
+|---|---|---|---|---|---|---|
+| finstack | 95 | 6 | 102 KB | ~1,075 | 6,568 chars (~1,640 tok) | ~25,500 tok |
+| nsekit | 117 | 2 | 59 KB | ~500 | 2,669 chars (~670 tok) | ~14,700 tok |
+| nse-bse | 59 | 1 | 47 KB | ~800 | 327 chars (~80 tok) | ~11,800 tok |
+| **Total** | **271** | **9** | **208 KB** | — | **9,564 chars (~2,390 tok)** | **~52,000 tok** |
+
+¹ Characters ÷ 4 chars-per-token (conservative for dense JSON). This is the upper bound — what the project would pay in a non-Cursor client that injects every tool at session start.
+
+Under the Cursor FileSystem mode we actually pay (a) ~180 tok for the `<mcp_file_system_servers>` registration (all three combined, trivial), plus (b) ~270 tok per unique tool descriptor read during a workflow. Per-call output tokens (e.g. a 1Y `equity_price_history` response ≈ 8 KB JSON) are the same regardless of MCP choice, so they do not factor in here.
+
+### Stay/go signal per server
+
+- **finstack — KEEP (primary, best utilization).** 6 of the 9 called tools. Per-workflow descriptor cost ~1,640 tok; the full 25.5 K-tok injection bound is tolerable for a primary data source. No plausible replacement at this price point for US fundamentals + SEC filings + India market-wide FII/DII in a single pinned MCP.
+
+- **nsekit — KEEP with caveat.** 2 tools used out of 117 — a 1.7% utilization of the largest surface of the three. Under Cursor FileSystem mode the steady-state cost is only ~670 tok, but the **classic-mode injection cost is ~14.7 K tok** — the single largest amortization risk in the project. Combined with the existing license gap (§5 of `config/mcp-servers.md`), this server is the first thing to shim if a non-Cursor client ever enters the stack. Action: if portability to Claude Desktop, LangChain, or CI becomes a requirement, wrap nsekit behind a thin local HTTP adapter that exposes only `equity_price_history` and `corporate_actions`; keep the upstream MCP local-only per existing policy. No action needed for M9 / M5 today.
+
+- **nse-bse — CANDIDATE TO DROP at M9 kickoff.** TERTIARY status, 1 tool used out of 59 (1.7% utilization), 47 KB server-side surface, and the `nse_equity_quote` call is **semantically subsumed by nsekit's `equity_price_history(symbol, period="1D")`** (see §2.3 and Gap G3). We are paying a 59-tool classic-mode cost (~11.8 K tok) and running a persistent `npx mcp-remote` process on `localhost:3000` for a convenience path that has a one-line substitute on an MCP we already keep. Unless Phase 2 live-quote latency benchmarking shows nse-bse materially faster than nsekit's 1D call (unmeasured today), drop nse-bse at the start of M9 and re-point §2.3 row `nse_equity_quote` at nsekit. A bd follow-up will be filed if the server survives M9 kickoff without a latency justification.
+
+### What is explicitly NOT a cost concern
+
+- `<mcp_file_system_servers>` registration overhead (~180 tok total) — trivial next to the SPEC doc itself.
+- Discovery-time `ls` of tool folders — per-session, not amortized, and bounded by the 271-file surface.
+- Tool-call output size — orthogonal to MCP selection; any equivalent upstream (Yahoo, EDGAR, Screener) would return the same shape.
+
+## 5. Consumer pointers
 
 Each downstream milestone reads this file; this section tells them exactly what to look at.
 
@@ -85,8 +116,9 @@ Each downstream milestone reads this file; this section tells them exactly what 
 - **M9 (`fundamentals-fetch` aggregator)** — read §2.1, §2.2, §2.3 top-to-bottom for the tool authority mapping. Read §3 Gaps G1 / G4 / G8 / G9 for the fallback paths. Implement ADR-detection (G4) and SEC multi-year fallback (G9) as part of the aggregator skill, not as per-ticker workarounds. bd: [`ai-portfolio-manager-v2b`](../.beads/) (G4), [`ai-portfolio-manager-8df`](../.beads/) (G9), [`ai-portfolio-manager-ine`](../.beads/) (G8).
 - **M14 (full-portfolio stress test)** — re-run the smoke matrix against the live portfolio once M9 lands. If any new gap surfaces, append a row here (not a new file) and file a bd ticket.
 
-## 5. Revision log
+## 6. Revision log
 
 | Date | Change |
 |---|---|
 | 2026-04-22 | Initial write. 9 gaps logged (1 high, 3 medium, 5 low) from the 42-cell India + US smoke test. 4 bd follow-ups filed. |
+| 2026-04-22 | Added §4 context-cost analysis. Measured descriptor surface (271 tools, 208 KB, 3.3% utilization). Flagged `nse-bse-mcp` as drop-candidate at M9 kickoff (1/59 tools used, subsumed by nsekit `equity_price_history(period="1D")`). Flagged `nsekit-mcp` as the largest classic-mode injection risk (~14.7 K tok) for non-Cursor clients. `finstack-mcp` retained as primary without reservation. |
