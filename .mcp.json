@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "finstack": {
+      "command": "uvx",
+      "args": ["finstack-mcp@0.10.0"]
+    },
+    "nsekit": {
+      "command": "uvx",
+      "args": ["nsekit-mcp@0.0.22"]
+    },
+    "nse-bse": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "http://localhost:3000/mcp", "--allow-http"]
+    }
+  }
+}
