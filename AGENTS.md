@@ -1,82 +1,48 @@
-# Agent Instructions
+# AI Portfolio Manager — Agent Constitution
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
+Runtime rules for the portfolio research agent. Every session touching this repo must follow these invariants. Full text in [docs/SPEC.md §19](docs/SPEC.md).
 
-## Quick Reference
+## Critical Invariants (must never be violated)
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
-```
+1. **Never write the Wealthfolio DB.** Read-only via `skills/wealthfolio-query/query.sh`. Writes go through the Wealthfolio UI. (SPEC §19 inv 11)
+2. **Phase 1 snapshot is frozen.** `temp/research/portfolio-snapshot.csv` is authoritative for the run — later phases add context but never rewrite it. (SPEC §19 inv 12)
+3. **Deterministic math, LLM narrative.** Scores, HHI, alpha, and persona sub-scores come from `scoring-engine`. The LLM writes rationale referencing those values; it never re-derives them. (SPEC §19 inv 15)
+4. **Immediate actions capped at 2 per report.** Reserved for confirmed thesis breaks only. (SPEC §19 inv 10)
+5. **Never fabricate data.** Missing → "N/A" or "Data not found", always with a source citation. (SPEC §19 inv 1)
 
-## Non-Interactive Shell Commands
+## Remaining Invariants
 
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
+Enforced by phase prompts — referenced by number, not duplicated here.
 
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
+- **Inv 2** Always cite sources: ticker, access date, tier (1=filings, 2=aggregators, 3=news, 4=social).
+- **Inv 3** Follow the MCP fallback chain (§15.2) fully before giving up.
+- **Inv 4** Report serves the user's philosophy, not generic advice.
+- **Inv 5** Context ledger ≤100 lines — continuity, not a second report.
+- **Inv 6** Filesystem is the inter-phase bridge (`temp/research/`). No live re-fetching after Phase 1.
+- **Inv 7** Dense `[Tag]` output format — no tables or bullets inside data lines.
+- **Inv 8** Fundamentals-first — valuation informs accumulation pace, not conviction.
+- **Inv 9** Price drops are review triggers, not sell signals.
+- **Inv 13** Missing thesis in `theses.yaml` is empty string, not an error.
+- **Inv 14** SQL queries versioned with Wealthfolio release; upgrades require explicit review.
+- **Inv 16** `my-philosophy` is always the first persona; rotating personas are sparring partners.
+- **Inv 17** Debate is selective — trigger rules (§11.2) are mandatory; universal debate is forbidden.
+- **Inv 18** Corp-actions feed is informational and non-blocking.
+- **Inv 19** Ledger is append-only — rows are never updated or deleted.
+- **Inv 20** Philosophy hash tracked per run; changes prompt re-baselining confirmation.
+- **Inv 21** MCP staleness triggers fallback to Tier B before accepting stale data.
 
-**Use these forms instead:**
-```bash
-# Force overwrite without prompting
-cp -f source dest           # NOT: cp source dest
-mv -f source dest           # NOT: mv source dest
-rm -f file                  # NOT: rm file
+## Directory Layout
 
-# For recursive operations
-rm -rf directory            # NOT: rm -r directory
-cp -rf source dest          # NOT: cp -r source dest
-```
+See [.agents/directory-contract.md](.agents/directory-contract.md) for the canonical artifact-to-phase mapping.
 
-**Other commands that may prompt:**
-- `scp` - use `-o BatchMode=yes` for non-interactive
-- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
-- `apt-get` - use `-y` flag
-- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
+## Phase Commands
 
-## Research-Plan-Implement (RPI) Structure
-
-When executing `bd` issues representing `docs/implementation.md` milestones:
-- **Research:** Save sandbox scripts and technical explorations to `research/milestones/`.
-- **Plan:** Before coding, ensure there is a clear implementation plan located in `plans/` (e.g., `plans/M0/plan.md`) or inside the `bd` issue.
-- **Implement:** Write final code in `skills/` or `.agents/`.
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
-```
-
-### Rules
-
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
-
-## Session Completion
-
-**When ending a work session**, complete the steps below. The user handles pushing to the remote — do NOT run `git push` or `bd dolt push` yourself.
-
-**WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **Stage/commit local changes only if the user asked** - Never push to the remote
-5. **Hand off** - Summarize what changed, what's left, and remind the user to push when they're ready
-
-**CRITICAL RULES:**
-- NEVER run `git push`, `git push --force`, or `bd dolt push` — the user pushes themselves
-- Do not create commits unless the user explicitly asks
-- If a push would normally be required to unblock something, say so and stop — don't do it
-<!-- END BEADS INTEGRATION -->
+| Command | Phase | Key output |
+|---------|-------|------------|
+| `/phase1` | Setup | `portfolio-snapshot.csv`, manifest, corp-actions |
+| `/phase2` | Research | `temp/research/stocks/{TICKER}.md` |
+| `/phase3` | Verification | `verification-notes.md` |
+| `/phase4` | Scoring | `## Scoring` block per stock |
+| `/phase5` | Persona Cross-Check | `## Persona Cross-Check` block per stock |
+| `/phase6` | Synthesis + Debate | `portfolio-analysis.md` |
+| `/phase7` | Report + Ledger | `reports/{market}/YYYY-MM-DD-weekly-report.md` |
