@@ -69,10 +69,21 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 5. Research-Plan-Implement (RPI) Framework
 
-When executing work against the milestones in `docs/implementation.md`:
-- **Research (R):** Save raw API explorations, MCP tests, or deep-dives in `research/milestones/` (e.g., `M0-investigation.md`).
-- **Plan (P):** Before implementing, create a technical design document in `plans/` (e.g., `plans/M0/plan.md`). Alternatively, put the plan directly in the `bd` issue. 
-- **Implement (I):** Execute the plan into the final structure (`skills/`, `.agents/`) based tightly on `docs/SPEC.md`. 
+When executing work against the milestones in `docs/implementation.md`, follow this order — **investigate before decomposing**:
+
+1. **R — milestone-level investigation.** Write `research/milestones/Mn-investigation.md` covering the architectural unknowns, candidate designs considered and rejected, and an **Open Questions** block. This is the "R" step. Keep it throwaway-ish; nothing here is authoritative.
+2. **Resolve open questions with the user in one round.** Do not interleave with decomposition.
+3. **Decompose into `bd` subtasks.** Create the epic's child tasks *after* R, using investigation findings to pick the seams. Do not blindly map `implementation.md` deliverable bullets → tasks if the investigation shows a different shape.
+4. **P — per-subtask plan.** Write `plans/Mn/Mn.x-<slug>.md` (or put the plan inline in the `bd` issue via `--design` / `--notes` for trivial subtasks — see `plans/README.md`).
+5. **I — implement.** Execute the plan into `skills/`, `.agents/`, etc. based tightly on `docs/SPEC.md`. Tier-1 artifacts produced here live at `research/<topic>-<version>.{md,txt}`.
+
+**Exceptions.**
+- If `implementation.md §Mn` already reads like a flat list of independent pin/config/document deliverables (e.g. M0), you may skip milestone-level R and do per-subtask research inline.
+- If a subtask discovers its own architectural surprise mid-plan, do a mini-R inside that plan, deviate, and record the deviation in the `bd` close note. Do not re-open the milestone-level investigation file.
+
+**Anti-patterns to avoid.**
+- Creating `bd` subtasks from `implementation.md` bullets before any investigation — risks splitting work along seams that don't exist yet.
+- Running R and writing subtasks simultaneously — open questions get resolved during planning, not before decomposition.
 
 ---
 

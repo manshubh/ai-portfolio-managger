@@ -60,11 +60,17 @@ Prefer a file in `plans/Mn/Mn.x-<slug>.md` when the plan needs review, diffing, 
 
 ## Workflow for writing a plan
 
+Plans are written **after** milestone-level R and **after** the epic has been decomposed into subtasks (see `../research/milestones/README.md` for the full RPI order). By the time you reach this file, the architectural unknowns should already be resolved.
+
 ```
-1. Claim the subtask:          bd update <Mn.x-id> --claim
-2. Finish R (if needed):       research/milestones/Mn-investigation.md
-3. Draft this file:            plans/Mn/Mn.x-<slug>.md
-4. Review against SPEC:        every acceptance criterion traces to a section
-5. Link the plan to bd:        bd update <Mn.x-id> --notes "See plans/Mn/Mn.x-<slug>.md"
-6. Start implementing.
+1. Confirm milestone-level R is done: research/milestones/Mn-investigation.md exists
+                                      with Open Questions resolved
+2. Confirm the subtask exists in bd:  bd show <Mn.x-id>
+3. Claim the subtask:                 bd update <Mn.x-id> --claim
+4. Draft this file:                   plans/Mn/Mn.x-<slug>.md
+5. Review against SPEC:               every acceptance criterion traces to a section
+6. Link the plan to bd:               bd update <Mn.x-id> --notes "See plans/Mn/Mn.x-<slug>.md"
+7. Start implementing.
 ```
+
+**Mid-plan surprises.** If the investigation missed something and the subtask needs a design choice that wasn't covered, do a mini-R inside this plan file (a short "Investigation" section), make the call, and record the deviation in the bd close note. Do not retroactively edit `Mn-investigation.md`.
