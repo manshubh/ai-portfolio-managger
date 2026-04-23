@@ -1,0 +1,58 @@
+# Per-ticker thesis sidecar for the India market.
+# Schema: SPEC §7.1.2. Keys are canonical yfinance tickers; values are free-text thesis strings.
+# Missing or empty thesis is valid per SPEC §19.13 (treated as empty, not an error).
+# Scaffolded from docs/sample_india.csv (52 tickers). User populates thesis text over time.
+
+theses:
+  AAVAS.NS: ""        # Aavas Financiers
+  ANGELONE.NS: ""     # Angel One
+  APOLLOHOSP.NS: ""   # Apollo Hospitals
+  ARMANFIN.NS: ""     # Arman Financial
+  ASIANPAINT.NS: ""   # Asian Paints
+  BAJAJ-AUTO.NS: ""   # Bajaj Auto
+  BANDHANBNK.NS: ""   # Bandhan Bank
+  BERGEPAINT.NS: ""   # Berger Paints
+  CAMS.NS: ""         # CAMS
+  CENTRALBK.NS: ""    # Central Bank
+  CIPLA.NS: ""        # Cipla
+  CLEAN.NS: ""        # Clean Science
+  CYIENT.NS: ""       # Cyient
+  DABUR.NS: ""        # Dabur India
+  DRREDDY.NS: ""      # Dr. Reddy's
+  FCL.NS: ""          # Fineotex Chem
+  FINEORG.NS: ""      # Fine Organic
+  FORTIS.NS: ""       # Fortis Healthcare
+  GLAND.NS: ""        # Gland Pharma
+  GREENPANEL.NS: ""   # Greenpanel Inds
+  HCLTECH.NS: ""      # HCL Tech
+  HINDUNILVR.NS: ""   # Hind. Unilever
+  IDFCFIRSTB.NS: ""   # IDFC First Bank
+  IEX.NS: ""          # IEX
+  INDIGOPNTS.NS: ""   # Indigo Paints
+  INDUSINDBK.NS: ""   # IndusInd Bank
+  INFY.NS: ""         # Infosys
+  IRCTC.NS: ""        # IRCTC
+  ITBEES.NS: ""       # Nippon Nifty IT (ETF)
+  JIOFIN.NS: ""       # Jio Financial
+  JSWDULUX.NS: ""     # JSW Paints
+  KANSAINER.NS: ""    # Kansai Nerolac
+  KAYNES.NS: ""       # Kaynes Tech
+  KOTAKBANK.NS: ""    # Kotak Mahindra Bank
+  LICI.NS: ""         # LIC India
+  MAXHEALTH.NS: ""    # Max Healthcare
+  NESTLEIND.NS: ""    # Nestle India
+  NEXT50IETF.NS: ""   # ICICI Pru Nifty Next 50 (ETF)
+  NIFTYBEES.NS: ""    # Nippon India Nifty 50 (ETF)
+  PVRINOX.NS: ""      # PVR Inox
+  RUSHIL.NS: ""       # Rushil Decor
+  SAMMAANCAP.NS: ""   # Sammaan Capital
+  SBICARD.NS: ""      # SBI Cards
+  SURYODAY.NS: ""     # Suryoday SFB
+  SWSOLAR.NS: ""      # Sterling & Wilson
+  TANLA.NS: ""        # Tanla Platforms
+  TATATECH.NS: ""     # Tata Technologies
+  TCS.NS: ""          # TCS
+  VAIBHAVGBL.NS: ""   # Vaibhav Global
+  VBL.NS: ""          # Varun Beverages
+  WIPRO.NS: ""        # Wipro
+  ZYDUSWELL.NS: ""    # Zydus Wellness
