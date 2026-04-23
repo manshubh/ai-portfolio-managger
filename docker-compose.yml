@@ -1,0 +1,16 @@
+# docker-compose.yml — Orchestrates the skills-env container.
+# See plans/M0/M0.9-docker-env.md for design rationale.
+
+services:
+  skills-env:
+    build: .
+    volumes:
+      # Mount the repository into the container
+      - .:/workspace
+      # Mount the Wealthfolio DB read-only. The path is provided via an
+      # environment variable; falls back to the default macOS location.
+      - ${WEALTHFOLIO_DB_PATH:-/Users/mrihal/Library/Application Support/Wealthfolio/ledger.db}:/wealthfolio/ledger.db:ro
+    environment:
+      - WEALTHFOLIO_DB=/wealthfolio/ledger.db
+    # Keep the container running for interactive use or exec
+    command: tail -f /dev/null

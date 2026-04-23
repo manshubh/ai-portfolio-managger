@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Runs a command inside the skills-env Docker container.
+# Usage: bin/run-skill <command> [args...]
+# Example: bin/run-skill python skills/scripts/claim-stocks.py
+
+set -euo pipefail
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: $0 <command> [args...]"
+    exit 1
+fi
+
+exec docker compose run --rm skills-env "$@"
