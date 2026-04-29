@@ -6,6 +6,23 @@ The goal is not to automate trading. The goal is to create a weekly decision sys
 
 This is still an early-stage project, so this README focuses on the product and analysis model we are aiming for rather than implementation details.
 
+## Development Status
+
+We are building this iteratively. Here is our visual timeline of milestone "beads":
+
+🟢 **M0** ➔ 🟢 **M1** ➔ ⚪ **M2** ➔ ⚪ **M3** ➔ ⚪ **M4** ➔ ⚪ **M5** ➔ ⚪ **M6** ➔ ⚪ **M7** ➔ ⚪ **M8** ➔ ⚪ **M9** ➔ ⚪ **M10** ➔ ⚪ **M11** ➔ ⚪ **M12** ➔ ⚪ **M13** ➔ ⚪ **M14** ➔ ⚪ **M15**
+
+*(🟢 = Complete | 🟡 = In Progress | ⚪ = Planned)*
+
+### Feature Milestones: What becomes usable when?
+
+- **After M4 (Ledger & Memory):** Foundational data and scoring are ready. You can programmatically query Wealthfolio, run deterministic scores, and query the local historical ledger without LLMs.
+- **After M6 (Benchmark):** The full quantitative pipeline is complete, adding corporate actions and benchmark alpha calculations.
+- **After M9 (Research Phase):** You can run automated, end-to-end single-stock research (fundamentals and qualitative news) through the agent.
+- **After M13 (Report Phase):** The core product works for India. The agent can synthesize research, run cross-persona debates, and generate the weekly action-oriented markdown report.
+- **After M14 (Full Integration):** The system is stress-tested for parallel processing, meaning you can safely run your entire portfolio.
+- **After M15:** US market support is activated.
+
 ## What We Want This To Become
 
 We want a local-first portfolio review system for Indian and US equities that can:
