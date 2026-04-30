@@ -76,6 +76,10 @@ Why not (b) Python builder: same content, more moving parts, no portability win 
 
 Why not (c) anonymized real DB: leaks position sizes / cost basis even after symbol scrubbing, and the ground truth for assertions has to be hand-derived anyway. A fixture written from scratch is faster to read, audit, and extend.
 
+### 3.1 Schema-dump gotcha: `sqlite_sequence`
+
+The canonical dump at [`research/wealthfolio-schema-v3.2.1.txt`](../wealthfolio-schema-v3.2.1.txt) includes the line `CREATE TABLE sqlite_sequence(name,seq);`. SQLite **refuses direct user creation of this name** — it is reserved as an internal catalog created implicitly the first time any `INTEGER PRIMARY KEY AUTOINCREMENT` column exists. A naive `sqlite3 fixture.db ".read schema.txt"` therefore fails. The fixture builder works around it by replacing that line with a throwaway `CREATE TABLE … AUTOINCREMENT; DROP TABLE …;` pair, which forces SQLite to materialize `sqlite_sequence` itself. Any future schema upgrade under [SPEC §19.2 invariant 14](../../docs/SPEC.md) — whoever regenerates the dump must either keep the `sqlite_sequence` line and the workaround, or strip the line before committing. `test_schema.sh`'s `.schema` diff will enforce whichever choice is made, so drift fails loudly.
+
 ---
 
 ## 4. `holdings_snapshots.positions` JSON shape — read upstream Rust
