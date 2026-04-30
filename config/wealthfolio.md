@@ -92,12 +92,14 @@ services:
   skills:
     volumes:
       - type: bind
-        source: ${HOME}/Library/Application Support/com.teymz.wealthfolio
+        source: ${WEALTHFOLIO_DB_DIR:-${HOME}/Library/Application Support/com.teymz.wealthfolio}
         target: /wealthfolio
         read_only: true
     environment:
       - WEALTHFOLIO_DB=/wealthfolio/app.db
 ```
+
+On the host, override the source directory by setting `WEALTHFOLIO_DB_DIR`; inside the container, scripts continue to read `WEALTHFOLIO_DB=/wealthfolio/app.db`.
 
 ### Caveats
 

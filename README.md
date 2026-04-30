@@ -14,6 +14,8 @@ We are building this iteratively. Here is our visual timeline of milestone "bead
 
 *(🟢 = Complete | 🟡 = In Progress | ⚪ = Planned)*
 
+**Local setup notes:** see [config/wealthfolio.md](config/wealthfolio.md) for the Wealthfolio install, DB path, and Docker mount contract.
+
 ### Feature Milestones: What becomes usable when?
 
 - **After M4 (Ledger & Memory):** Foundational data and scoring are ready. You can programmatically query Wealthfolio, run deterministic scores, and query the local historical ledger without LLMs.

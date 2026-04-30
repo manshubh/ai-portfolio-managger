@@ -1,5 +1,6 @@
 # docker-compose.yml — Orchestrates the skills-env container.
 # See plans/M0/M0.9-docker-env.md for design rationale.
+# DB-mount contract: config/wealthfolio.md §6 (M2.1 reconcile).
 
 services:
   skills-env:
@@ -7,10 +8,14 @@ services:
     volumes:
       # Mount the repository into the container
       - .:/workspace
-      # Mount the Wealthfolio DB read-only. The path is provided via an
-      # environment variable; falls back to the default macOS location.
-      - ${WEALTHFOLIO_DB_PATH:-/Users/mrihal/Library/Application Support/Wealthfolio/ledger.db}:/wealthfolio/ledger.db:ro
+      # Mount the Wealthfolio app-support directory read-only.
+      # Directory mount (not file) so SQLite WAL sidecars
+      # (app.db-wal, app.db-shm) are visible alongside app.db.
+      - type: bind
+        source: ${WEALTHFOLIO_DB_DIR:-${HOME}/Library/Application Support/com.teymz.wealthfolio}
+        target: /wealthfolio
+        read_only: true
     environment:
-      - WEALTHFOLIO_DB=/wealthfolio/ledger.db
+      - WEALTHFOLIO_DB=/wealthfolio/app.db
     # Keep the container running for interactive use or exec
     command: tail -f /dev/null
