@@ -2,9 +2,10 @@
 -- schema-ref: research/wealthfolio-schema-v3.2.1.txt
 -- mode: holdings-only (no reads from the `activities` table — see SPEC §5.2)
 -- binding: SQLite named parameters (:param)
--- fidelity: shape-first skeleton. Join structure and parameter shape are pinned;
---           Position JSON field names, multi-currency cash, and TWR chaining are
---           deferred to the wrapper skill (M2). Look for `TODO(M2)` inline.
+-- fidelity: Position JSON shape is pinned to Wealthfolio v3.2.1
+--           (commit 23bc088778898a499aab658694e2e2a8c1d208f1; see Position
+--           provenance block below). Multi-currency-per-account cash and TWR
+--           chaining are delegated to later M2 subtasks (M2.7, M2.8).
 --
 -- Named-query convention
 --   Each query is introduced by `-- name: <slug>` on its own line and terminated
@@ -26,6 +27,12 @@
 --     scope_type IN ('market','account_group','account'); `accounts."group"` is
 --     always quoted (reserved word in SQLite).
 --
+-- Position JSON shape pinned from Wealthfolio v3.2.1 commit 23bc0887:
+-- AccountStateSnapshot.positions is asset_id -> Position; Position uses camelCase serde.
+-- Source: crates/core/src/portfolio/snapshot/positions_model.rs and
+--         crates/core/src/portfolio/snapshot/holdings_calculator.rs.
+-- JSON paths used: $.quantity, $.averageCost (Decimal serialized via serde-float).
+--
 -- Invariants (SPEC §19.1)
 --   Read-only. No DDL/DML below — enforced at the wrapper layer via
 --   `sqlite3 -readonly` and statically by `grep` in this milestone's verification.
@@ -39,8 +46,6 @@
 -- notes:   Sums total_value * fx_rate_to_base across the latest
 --          daily_account_valuation row per account on or before :date.
 --          Decimal fields are stored as TEXT in Wealthfolio; cast to REAL on read.
---          TODO(M2): evaluate whether REAL precision is adequate vs. parsing the
---                    TEXT as Python Decimal in the wrapper.
 -- name: get-net-worth
 WITH valuation_at_date AS (
     SELECT dav.*
@@ -75,8 +80,6 @@ WHERE acc.is_active   = 1
 -- notes:   v1 reads the per-account cash line from the latest daily_account_valuation
 --          row. Accounts whose holdings_snapshots.cash_balances JSON holds multiple
 --          currencies are out of scope for v1.
---          TODO(M2): for multi-ccy cash accounts, fan out via
---                    json_each(holdings_snapshots.cash_balances) and filter by key.
 -- name: get-cash-balance
 WITH latest_valuation AS (
     SELECT dav.*
@@ -117,9 +120,6 @@ WHERE acc.is_active   = 1
 -- notes:   Slim on-demand holdings listing. `current_price` is the latest quotes.close
 --          per asset; in practice equal to `snapshot_price` from export-snapshot at
 --          export time, but drifts between runs.
---          TODO(M2): confirm the holdings_snapshots.positions JSON key is assets.id
---                    (the `p.key = a.id` join). If it is instrument_key or display_code,
---                    swap the join column.
 -- name: list-holdings
 WITH latest_snapshot AS (
     SELECT hs.*
@@ -135,9 +135,9 @@ WITH latest_snapshot AS (
 positions_flat AS (
     SELECT
         hs.account_id,
-        p.key                                AS position_key,   -- TODO(M2): confirm key is asset_id
-        json_extract(p.value, '$.quantity')  AS quantity,       -- TODO(M2): confirm JSON path
-        json_extract(p.value, '$.avg_cost')  AS avg_cost        -- TODO(M2): confirm JSON path
+        p.key                                  AS position_key,
+        json_extract(p.value, '$.quantity')    AS quantity,
+        json_extract(p.value, '$.averageCost') AS avg_cost
     FROM latest_snapshot hs,
          json_each(hs.positions) p
 ),
@@ -176,7 +176,7 @@ scoped AS (
         acc.name                                               AS account_name
     FROM positions_flat pf
     JOIN accounts acc         ON acc.id     = pf.account_id
-    JOIN assets   a           ON a.id       = pf.position_key  -- TODO(M2): confirm join column
+    JOIN assets   a           ON a.id       = pf.position_key
     LEFT JOIN latest_quote lq ON lq.asset_id = a.id
     WHERE acc.is_active   = 1
       AND acc.is_archived = 0
@@ -212,8 +212,13 @@ WHERE (:market = 'all' OR market = :market)
 --          input/{market}/theses.yaml before writing portfolio-snapshot.csv
 --          (SPEC §5.4). allocation_pct is computed AFTER the scope filter so it
 --          reflects the chosen slice, not the full portfolio.
---          TODO(M2): assets.kind + instrument_type → {stock, ETF} mapping below
---                    is a placeholder. Refine once fixture data is seeded.
+--
+--          asset_type ∈ {stock, ETF} (SPEC §7.1.1) is derived from the
+--          `instrument_type` taxonomy: any asset whose category id is `ETF` or whose
+--          category sits under `ETP` is an ETF; everything else (incl. unassigned
+--          assets) falls back to `stock`. assets.instrument_type alone is too coarse
+--          because upstream lumps stocks/ETFs/funds into the same provider-routing
+--          enum (`EQUITY`).
 -- name: export-snapshot
 WITH latest_snapshot AS (
     SELECT hs.*
@@ -229,9 +234,9 @@ WITH latest_snapshot AS (
 positions_flat AS (
     SELECT
         hs.account_id,
-        p.key                                AS position_key,   -- TODO(M2)
-        json_extract(p.value, '$.quantity')  AS quantity,       -- TODO(M2)
-        json_extract(p.value, '$.avg_cost')  AS avg_cost        -- TODO(M2)
+        p.key                                  AS position_key,
+        json_extract(p.value, '$.quantity')    AS quantity,
+        json_extract(p.value, '$.averageCost') AS avg_cost
     FROM latest_snapshot hs,
          json_each(hs.positions) p
 ),
@@ -245,6 +250,20 @@ latest_quote AS (
     ) m
       ON m.asset_id = q.asset_id
      AND m.max_day  = q.day
+),
+asset_type_map AS (
+    SELECT
+        ata.asset_id,
+        MAX(CASE
+              WHEN tc.id = 'ETF' OR tc.parent_id = 'ETP' THEN 1
+              ELSE 0
+            END) AS is_etf
+    FROM asset_taxonomy_assignments ata
+    JOIN taxonomy_categories tc
+      ON tc.taxonomy_id = ata.taxonomy_id
+     AND tc.id          = ata.category_id
+    WHERE ata.taxonomy_id = 'instrument_type'
+    GROUP BY ata.asset_id
 ),
 scoped AS (
     SELECT
@@ -265,19 +284,19 @@ scoped AS (
         a.quote_ccy    AS currency,
         acc.name       AS account,
         acc."group"    AS account_group,
-        -- TODO(M2): refine using assets.kind + instrument_type + taxonomy assignments
         CASE
-          WHEN a.instrument_type = 'EQUITY' THEN 'stock'
-          ELSE 'ETF'
+          WHEN COALESCE(atm.is_etf, 0) = 1 THEN 'ETF'
+          ELSE 'stock'
         END AS asset_type,
         CAST(pf.quantity AS REAL)                              AS quantity,
         CAST(pf.avg_cost AS REAL)                              AS avg_cost,
         CAST(lq.close    AS REAL)                              AS snapshot_price,
         CAST(pf.quantity AS REAL) * CAST(lq.close AS REAL)     AS snapshot_market_value
     FROM positions_flat pf
-    JOIN accounts acc         ON acc.id     = pf.account_id
-    JOIN assets   a           ON a.id       = pf.position_key  -- TODO(M2)
-    LEFT JOIN latest_quote lq ON lq.asset_id = a.id
+    JOIN accounts acc          ON acc.id     = pf.account_id
+    JOIN assets   a            ON a.id       = pf.position_key
+    LEFT JOIN latest_quote   lq  ON lq.asset_id = a.id
+    LEFT JOIN asset_type_map atm ON atm.asset_id = a.id
     WHERE acc.is_active   = 1
       AND acc.is_archived = 0
 ),
@@ -319,9 +338,8 @@ FROM filtered
 -- returns: avg_cost (quantity-weighted across accounts holding the ticker)
 -- notes:   In holdings-only mode, avg cost lives inside the positions JSON — not in
 --          activities. Reverse-maps :ticker via instrument_symbol + MIC, falling
---          back to display_code for MIC-less assets.
---          TODO(M2): extend the reverse-match for ADRs / cross-listed names that
---                    need a lookup table instead of the COALESCE fallback.
+--          back to display_code for MIC-less assets. ADR / cross-listed reverse
+--          lookups are out of scope for v1.
 -- name: get-avg-cost
 WITH latest_snapshot AS (
     SELECT hs.*
@@ -337,9 +355,9 @@ WITH latest_snapshot AS (
 positions_flat AS (
     SELECT
         hs.account_id,
-        p.key                                AS position_key,   -- TODO(M2)
-        json_extract(p.value, '$.quantity')  AS quantity,       -- TODO(M2)
-        json_extract(p.value, '$.avg_cost')  AS avg_cost        -- TODO(M2)
+        p.key                                  AS position_key,
+        json_extract(p.value, '$.quantity')    AS quantity,
+        json_extract(p.value, '$.averageCost') AS avg_cost
     FROM latest_snapshot hs,
          json_each(hs.positions) p
 ),
@@ -349,7 +367,7 @@ matched AS (
         CAST(pf.avg_cost AS REAL) AS avg_cost
     FROM positions_flat pf
     JOIN accounts acc ON acc.id = pf.account_id
-    JOIN assets   a   ON a.id   = pf.position_key   -- TODO(M2)
+    JOIN assets   a   ON a.id   = pf.position_key
     WHERE acc.is_active   = 1
       AND acc.is_archived = 0
       AND (
@@ -384,11 +402,6 @@ FROM matched
 --          Market filter uses accounts.currency (INR↔india, USD↔us). This is coarser
 --          than the holdings-level MIC inference but daily_account_valuation does not
 --          carry per-asset data.
---          TODO(M2): if a user holds cross-market assets in a single account this
---                    aggregates across markets. Refine with a positions-weighted
---                    split if real data shows this matters.
---          TODO(M2): wrapper must forward-fill weekend / holiday gaps before
---                    computing daily returns.
 -- name: get-portfolio-twr
 SELECT
     dav.valuation_date AS date,
