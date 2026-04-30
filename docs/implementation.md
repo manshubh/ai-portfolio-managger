@@ -168,14 +168,14 @@ flowchart TB
 **Dependencies.** M0 (schema dump, pinned release).
 
 **Deliverables.**
-- `skills/wealthfolio-query/query.sh` wrapping `sqlite3 -readonly`, enforcing parameterized queries via `.parameter set`.
+- `skills/wealthfolio_query/query.sh` wrapping `sqlite3 -readonly`, enforcing parameterized queries via `.parameter set`.
 - All six subcommands from SPEC §18.1: `export-snapshot`, `list-holdings`, `get-cash-balance`, `get-net-worth`, `get-avg-cost`, `get-portfolio-twr`. (`get-portfolio-twr` reads `daily_account_valuation` snapshots, not the `activities` table.)
 - `skills/sql/wealthfolio-queries.sql` filled in to match the pinned schema, with `-- version: <wealthfolio-release>` header.
 - `--format json|csv` support; default JSON except `export-snapshot` (CSV per SPEC §7.1.1).
 - `export-snapshot` merges `input/{market}/theses.yaml` into the `thesis` column deterministically; missing thesis is empty string, not an error (SPEC §19.13).
-- Test fixture `tests/wealthfolio-query/fixture.db` — a seeded SQLite file with 5 India + 3 US tickers covering stock + ETF + cash. Holdings + quotes + `daily_account_valuation` rows only; no `activities` rows (holdings-only mode).
-- `tests/wealthfolio-query/test_queries.sh` exercising every subcommand against the fixture.
-- `skills/wealthfolio-query/README.md`.
+- Test fixture `tests/wealthfolio_query/fixture.db` — a seeded SQLite file with 5 India + 3 US tickers covering stock + ETF + cash. Holdings + quotes + `daily_account_valuation` rows only; no `activities` rows (holdings-only mode).
+- `tests/wealthfolio_query/test_queries.sh` exercising every subcommand against the fixture.
+- `skills/wealthfolio_query/README.md`.
 
 **Acceptance Criteria.**
 - `wealthfolio-query export-snapshot --market india --scope-type market --scope-value india --theses input/india/theses.yaml --output /tmp/snap.csv` produces a CSV whose header exactly matches SPEC §7.1.1.

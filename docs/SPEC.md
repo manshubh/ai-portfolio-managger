@@ -343,7 +343,7 @@ Default batch size is 10, but Phase 2 / 4 / 5 batch size is explicitly user-conf
   - `get-avg-cost <ticker>`
   - `get-portfolio-twr --market <india|us> --start <date> --end <date>` (reads `daily_account_valuation` snapshots; independent of the `activities` table)
 - **Read-only**. Uses `sqlite3 -readonly` mode.
-- **Output**: JSON rows by default; CSV available via `--format csv`. `export-snapshot` writes the normalized Phase 1 snapshot schema from §7.1.1 and may echo preview rows to stdout for user review.
+- **Output**: JSON rows by default; CSV available via `--format csv`. `export-snapshot` writes the normalized Phase 1 snapshot schema from §7.1.1. When `--output <path>` is supplied, the wrapper writes the file and exits silently — preview rows are not echoed. When `--output` is omitted, the CSV is streamed to stdout instead.
 
 ---
 
@@ -1406,7 +1406,7 @@ ai-portfolio-manager/
 │   ├── corp-actions-monitor/
 │   │   ├── monitor.py
 │   │   └── README.md
-│   ├── wealthfolio-query/
+│   ├── wealthfolio_query/
 │   │   ├── query.sh                          # sqlite3 wrapper
 │   │   └── README.md
 │   ├── sql/
