@@ -41,10 +41,15 @@
 -- =============================================================================
 -- get-net-worth — SPEC §5.3 / §6.8
 -- =============================================================================
--- params:  :date  (YYYY-MM-DD; NULL selects the latest available valuation per account)
--- returns: net_worth_base
+-- params:  :date      (YYYY-MM-DD; NULL selects the latest available valuation per account)
+--          :market    (india|us|all)
+--          :currency  (INR|USD|none; none emits base-currency total)
+-- returns: base_total, fx_day
 -- notes:   Sums total_value * fx_rate_to_base across the latest
---          daily_account_valuation row per account on or before :date.
+--          daily_account_valuation row per active account on or before :date,
+--          filtered by market. `fx_day` is emitted so the shell wrapper can
+--          convert the base total to an output denomination without turning
+--          `--currency` into an account filter.
 --          Decimal fields are stored as TEXT in Wealthfolio; cast to REAL on read.
 -- name: get-net-worth
 WITH valuation_at_date AS (
@@ -58,25 +63,45 @@ WITH valuation_at_date AS (
     ) m
       ON m.account_id = dav.account_id
      AND m.max_date   = dav.valuation_date
+),
+active_valuation AS (
+    SELECT
+        v.*,
+        acc.currency AS account_currency
+    FROM valuation_at_date v
+    JOIN accounts acc ON acc.id = v.account_id
+    WHERE acc.is_active   = 1
+      AND acc.is_archived = 0
+),
+market_filtered AS (
+    SELECT *
+    FROM active_valuation
+    WHERE :market = 'all'
+       OR (:market = 'india' AND account_currency = 'INR')
+       OR (:market = 'us'    AND account_currency = 'USD')
 )
 SELECT
-    SUM(CAST(v.total_value AS REAL) * CAST(v.fx_rate_to_base AS REAL)) AS net_worth_base
-FROM valuation_at_date v
-JOIN accounts acc ON acc.id = v.account_id
-WHERE acc.is_active   = 1
-  AND acc.is_archived = 0
+    COALESCE(
+        SUM(CAST(m.total_value AS REAL) * CAST(m.fx_rate_to_base AS REAL)),
+        0.0
+    ) AS base_total,
+    (
+        SELECT MAX(CAST(av.fx_rate_to_base AS REAL))
+        FROM active_valuation av
+        WHERE :currency != 'none'
+          AND av.account_currency = :currency
+    ) AS fx_day
+FROM market_filtered m
 ;
 
 
 -- =============================================================================
 -- get-cash-balance — SPEC §6.8
 -- =============================================================================
--- params:  :currency     (INR|USD)
+-- params:  :currency     (INR|USD|all)
 --          :scope_type   (market|account_group|account)
---          :scope_value  (string; ignored when scope_type='market' since currency
---                         already resolves the market axis via the INR↔india,
---                         USD↔us bijection)
--- returns: cash_balance  (denominated in :currency)
+--          :scope_value  (string; `all` with scope_type='market' passes all)
+-- returns: cash_balance  (native when :currency is INR/USD; base currency when all)
 -- notes:   v1 reads the per-account cash line from the latest daily_account_valuation
 --          row. Accounts whose holdings_snapshots.cash_balances JSON holds multiple
 --          currencies are out of scope for v1.
@@ -93,14 +118,24 @@ WITH latest_valuation AS (
      AND m.max_date   = dav.valuation_date
 )
 SELECT
-    SUM(CAST(v.cash_balance AS REAL)) AS cash_balance
+    COALESCE(
+        SUM(
+            CASE
+              WHEN :currency = 'all'
+                THEN CAST(v.cash_balance AS REAL) * CAST(v.fx_rate_to_base AS REAL)
+              ELSE CAST(v.cash_balance AS REAL)
+            END
+        ),
+        0.0
+    ) AS cash_balance
 FROM latest_valuation v
 JOIN accounts acc ON acc.id = v.account_id
 WHERE acc.is_active   = 1
   AND acc.is_archived = 0
-  AND acc.currency    = :currency
+  AND (:currency = 'all' OR acc.currency = :currency)
   AND (
-          (:scope_type = 'market'
+          (:scope_type = 'market' AND :scope_value = 'all')
+       OR (:scope_type = 'market'
              AND ((:scope_value = 'india' AND acc.currency = 'INR')
                OR (:scope_value = 'us'    AND acc.currency = 'USD')))
        OR (:scope_type = 'account_group' AND acc."group" = :scope_value)
@@ -115,11 +150,11 @@ WHERE acc.is_active   = 1
 -- params:  :market       (india|us|all)
 --          :scope_type   (market|account_group|account)
 --          :scope_value  (string matching the scope axis)
--- returns: symbol, currency, quantity, avg_cost, current_price, market_value,
---          allocation_pct
--- notes:   Slim on-demand holdings listing. `current_price` is the latest quotes.close
---          per asset; in practice equal to `snapshot_price` from export-snapshot at
---          export time, but drifts between runs.
+-- returns: ticker, name, market, currency, account, account_group, asset_type,
+--          quantity, avg_cost, snapshot_price, snapshot_market_value,
+--          allocation_pct, unrealized_pl_pct
+-- notes:   Mirrors export-snapshot's normalized row shape except for the thesis
+--          column, which is merged only by the export-snapshot wrapper.
 -- name: list-holdings
 WITH latest_snapshot AS (
     SELECT hs.*
@@ -152,6 +187,20 @@ latest_quote AS (
       ON m.asset_id = q.asset_id
      AND m.max_day  = q.day
 ),
+asset_type_map AS (
+    SELECT
+        ata.asset_id,
+        MAX(CASE
+              WHEN tc.id = 'ETF' OR tc.parent_id = 'ETP' THEN 1
+              ELSE 0
+            END) AS is_etf
+    FROM asset_taxonomy_assignments ata
+    JOIN taxonomy_categories tc
+      ON tc.taxonomy_id = ata.taxonomy_id
+     AND tc.id          = ata.category_id
+    WHERE ata.taxonomy_id = 'instrument_type'
+    GROUP BY ata.asset_id
+),
 scoped AS (
     SELECT
         CASE
@@ -159,7 +208,8 @@ scoped AS (
           WHEN a.instrument_exchange_mic = 'XBOM' THEN a.instrument_symbol || '.BO'
           WHEN a.instrument_exchange_mic IN ('XNAS','XNYS','ARCX') THEN a.instrument_symbol
           ELSE COALESCE(a.display_code, a.instrument_symbol)
-        END AS symbol,
+        END AS ticker,
+        a.name AS name,
         CASE
           WHEN a.instrument_exchange_mic IN ('XNSE','XBOM') THEN 'india'
           WHEN a.instrument_exchange_mic IN ('XNAS','XNYS','ARCX') THEN 'us'
@@ -167,35 +217,55 @@ scoped AS (
           WHEN a.instrument_exchange_mic IS NULL AND acc.currency = 'USD' THEN 'us'
           ELSE 'unknown'
         END AS market,
-        a.quote_ccy                                            AS currency,
-        CAST(pf.quantity AS REAL)                              AS quantity,
-        CAST(pf.avg_cost AS REAL)                              AS avg_cost,
-        CAST(lq.close    AS REAL)                              AS current_price,
-        CAST(pf.quantity AS REAL) * CAST(lq.close AS REAL)     AS market_value,
-        acc."group"                                            AS account_group,
-        acc.name                                               AS account_name
+        a.quote_ccy AS currency,
+        acc.name    AS account,
+        acc."group" AS account_group,
+        CASE
+          WHEN COALESCE(atm.is_etf, 0) = 1 THEN 'ETF'
+          ELSE 'stock'
+        END AS asset_type,
+        CAST(pf.quantity AS REAL)                          AS quantity,
+        CAST(pf.avg_cost AS REAL)                          AS avg_cost,
+        CAST(lq.close    AS REAL)                          AS snapshot_price,
+        CAST(pf.quantity AS REAL) * CAST(lq.close AS REAL) AS snapshot_market_value
     FROM positions_flat pf
-    JOIN accounts acc         ON acc.id     = pf.account_id
-    JOIN assets   a           ON a.id       = pf.position_key
-    LEFT JOIN latest_quote lq ON lq.asset_id = a.id
+    JOIN accounts acc           ON acc.id     = pf.account_id
+    JOIN assets   a             ON a.id       = pf.position_key
+    LEFT JOIN latest_quote   lq  ON lq.asset_id = a.id
+    LEFT JOIN asset_type_map atm ON atm.asset_id = a.id
     WHERE acc.is_active   = 1
       AND acc.is_archived = 0
+),
+filtered AS (
+    SELECT *
+    FROM scoped
+    WHERE (:market = 'all' OR market = :market)
+      AND (
+              (:scope_type = 'market' AND :scope_value = 'all')
+           OR (:scope_type = 'market'        AND market        = :scope_value)
+           OR (:scope_type = 'account_group' AND account_group = :scope_value)
+           OR (:scope_type = 'account'       AND account       = :scope_value)
+          )
 )
 SELECT
-    symbol,
+    ticker,
+    name,
+    market,
     currency,
+    account,
+    account_group,
+    asset_type,
     quantity,
     avg_cost,
-    current_price,
-    market_value,
-    market_value * 1.0 / NULLIF(SUM(market_value) OVER (), 0) AS allocation_pct
-FROM scoped
-WHERE (:market = 'all' OR market = :market)
-  AND (
-          (:scope_type = 'market'        AND market        = :scope_value)
-       OR (:scope_type = 'account_group' AND account_group = :scope_value)
-       OR (:scope_type = 'account'       AND account_name  = :scope_value)
-      )
+    snapshot_price,
+    snapshot_market_value,
+    snapshot_market_value * 1.0 / NULLIF(SUM(snapshot_market_value) OVER (), 0) AS allocation_pct,
+    CASE
+      WHEN avg_cost IS NULL OR avg_cost = 0 THEN NULL
+      ELSE (snapshot_price - avg_cost) * 1.0 / avg_cost
+    END AS unrealized_pl_pct
+FROM filtered
+ORDER BY ticker, account
 ;
 
 

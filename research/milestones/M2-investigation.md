@@ -102,7 +102,7 @@ The MIC-value introspection (R3 from M0.7) follows the same path: M2 also adds `
 
 - Daily returns produced: `r[s+1], r[s+2], …, r[e]` — total `(e − s)` returns.
 - `V[s]` is the anchor; `r[s]` is **not** part of the product.
-- `r[t] = (V[t] − V[t−1] − C[t]) / V[t−1]` where `C[t]` is the daily contribution delta computed from `cumulative_net_contribution_base[t] − cumulative_net_contribution_base[t−1]`.
+- `r[t] = (V[t] − V[t−1] − C[t]) / V[t−1]` where `C[t]` is the daily contribution delta computed from `cumulative_net_contribution[t] − cumulative_net_contribution[t−1]`. In v3.2.1 the underlying DB column is `daily_account_valuation.net_contribution` (no `cumulative_` prefix), re-emitted as a running total by upstream each row — confirmed during M2.3 upstream lookup.
 - `TWR = ∏(1 + r[t]) − 1` over the window.
 - `--start = --end` returns `TWR = 0.0` (zero-day window, no returns to chain).
 - Caller-side: M6 "1m window ending today" → `--start = today − 30d, --end = today`. No off-by-one.
@@ -113,10 +113,11 @@ Pinned for the v3.2.1 schema (see [`research/wealthfolio-schema-v3.2.1.txt`](../
 
 - `account_id` — used for scope filtering against the `accounts` join.
 - `valuation_date` — `TEXT` (`YYYY-MM-DD`); used as the chain index and `ORDER BY` key.
-- `total_value_base` — `TEXT`, cast `AS REAL`; the `V[t]` series.
-- `cumulative_net_contribution_base` — `TEXT`, cast `AS REAL`; differenced day-to-day to derive `C[t]`.
+- `total_value` — `TEXT`, cast `AS REAL`; native-currency account total. The `V[t]` series is computed base-currency on read (see `fx_rate_to_base` below).
+- `net_contribution` — `TEXT`, cast `AS REAL`; *cumulative* native-currency running total (despite the column name lacking a "cumulative" prefix; upstream v3.2.1 re-emits the running total each row per M2.3). The wrapper differences it day-to-day to derive `C[t]`.
+- `fx_rate_to_base` — `TEXT`, cast `AS REAL`; per-row conversion factor to `base_currency`. Base-currency series are computed on read as `CAST(total_value AS REAL) * CAST(fx_rate_to_base AS REAL)` (and similarly for `net_contribution`). **v3.2.1 has no `*_base` columns** — an earlier draft of this document assumed `total_value_base` / `cumulative_net_contribution_base` / `cash_balance_base` existed; they do not, and every reference has been rewritten to the computed-on-read form (confirmed during M2.6/M2.7/M2.8 planning).
 
-Cash-balance and net-worth queries also read `cash_balance_base` from the same table (see §9.1 below). No other columns are touched. If a future Wealthfolio release renames any of these, the schema-version header check (§2) catches it; the SQL file is the single point of update.
+Cash-balance and net-worth queries also read `cash_balance * fx_rate_to_base` from the same table (see §9.1 below). No other columns are touched. If a future Wealthfolio release renames any of these, the schema-version header check (§2) catches it; the SQL file is the single point of update.
 
 ### Forward-fill rule
 
@@ -240,22 +241,24 @@ Pinning the semantics that [SPEC §6.8](../../docs/SPEC.md) and [SPEC §18.1](..
 **`export-snapshot`** — see §10 below for the column order, thesis merge, and row-order discipline.
 
 **`list-holdings`**
-- Output rows carry the same 13 columns as [§7.1.1](../../docs/SPEC.md) **minus** `thesis` (no theses merge here — `list-holdings` is for tooling that doesn't care about thesis text).
-- Filters: `--market`, `--scope-type/--scope-value`. Both optional; defaults to all active accounts.
+- Output rows carry the same 13 columns as [§7.1.1](../../docs/SPEC.md) **minus** `thesis` (no theses merge here — `list-holdings` is for tooling that doesn't care about thesis text). Column order: `ticker, name, market, currency, account, account_group, asset_type, quantity, avg_cost, snapshot_price, snapshot_market_value, allocation_pct, unrealized_pl_pct`. The column names and derivation exactly mirror `export-snapshot` — same `asset_type_map` CTE, same Yahoo-ticker normalization, same `snapshot_price`/`snapshot_market_value` semantics. This is a deliberate widening from the earlier 7-column SQL skeleton (pre-M2.6), adopted so `list-holdings` and `export-snapshot` share a single `scoped` CTE shape and so CSV/JSON formatters don't special-case columns.
+- Filters: `--market` (`india`/`us`/`all`), `--scope-type/--scope-value`. Both optional; defaults to all active accounts.
+- `--format`: `json` (default) or `csv`.
 - Row order: `ORDER BY ticker, account` for byte-identical re-runs.
 
 **`get-cash-balance`**
-- Reads `daily_account_valuation.cash_balance_base` for the most recent `valuation_date` per scoped account, summed.
-- `--currency`: `INR`, `USD`, or omitted.
-  - Omitted → returns the base-currency sum directly (no conversion).
-  - `INR`/`USD` → restricts the sum to accounts whose `accounts.currency = :ccy`. Does *not* apply FX conversion (Wealthfolio already normalizes to base; per-currency requests use the native-currency column path: `cash_balance` rather than `cash_balance_base`. The SQL named query handles the column choice.)
+- Reads `daily_account_valuation.cash_balance * fx_rate_to_base` for the most recent `valuation_date` per scoped account, summed.
+- `--currency`: `INR`, `USD`, `all`, or omitted.
+  - Omitted / `all` → base-currency sum across active accounts (uses `cash_balance * fx_rate_to_base`).
+  - `INR`/`USD` → native-currency sum restricted to accounts whose `accounts.currency = :ccy` (reads `cash_balance` directly, no FX factor).
 - Multi-currency-per-account expansion (the `holdings_snapshots.cash_balances` JSON HashMap fan-out) is **out of scope for v1** — see §14.
 - Empty scope returns `0.0` (silent unless `--strict-scope`).
 
 **`get-net-worth`**
-- Reads `daily_account_valuation.total_value_base` summed across all active accounts in the requested market.
+- Reads `daily_account_valuation.total_value * fx_rate_to_base` summed across all active accounts in the requested market.
+- **`--market`**: `india`, `us`, or `all` (deliberate deviation from [SPEC §18.1](../../docs/SPEC.md), which omits `--market`; the SPEC signature is under-specified for the two-market case and M2.6 adds the flag to match the bead's per-market acceptance. Spec+help text updated in M2.10/docs-sweep). Filter maps to `accounts.currency` via the INR↔india, USD↔us bijection (same bijection used by `get-cash-balance`).
 - `--date`: defaults to the most recent `valuation_date` available (not the calendar today, in case Wealthfolio hasn't snapshotted yet). When supplied, the wrapper picks the last `valuation_date <= :date`.
-- `--currency`: same semantics as `get-cash-balance` — omitted = base; `INR`/`USD` selects a same-currency-account-only path.
+- `--currency`: `INR`, `USD`, or omitted. The flag **only** controls the output denomination — it does not filter accounts. The wrapper reads base-currency aggregates and, when `--currency` is set and differs from base, converts using the day's `fx_rate_to_base` (specifically, the rate on the selected `valuation_date`, picked from a USD-denominated account if the user asked for USD, or from an INR-denominated account for INR). Omitted → emit in base.
 - No `--scope-type` (per [SPEC §18.1](../../docs/SPEC.md)).
 
 **`get-avg-cost <ticker>`**

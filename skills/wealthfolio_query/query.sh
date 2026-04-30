@@ -42,7 +42,7 @@ Subcommands (SPEC §18.1):
 
   list-holdings    [--market india|us|all] [--scope-type ...] [--scope-value ...] [--format json|csv]
   get-cash-balance [--currency INR|USD|all] [--scope-type ...] [--scope-value ...]
-  get-net-worth    [--date <YYYY-MM-DD>] [--currency INR|USD]
+  get-net-worth    [--market india|us|all] [--date <YYYY-MM-DD>] [--currency INR|USD]
   get-avg-cost     <ticker>
   get-portfolio-twr --market <...> --start <date> --end <date>
 
@@ -92,6 +92,356 @@ placeholder() {
   exit "$EXIT_DB"
 }
 
+is_choice() {
+  local value="$1"
+  shift
+  local choice
+  for choice in "$@"; do
+    [[ "$value" == "$choice" ]] && return 0
+  done
+  return 1
+}
+
+validate_choice() {
+  local flag="$1"
+  local value="$2"
+  shift 2
+  if ! is_choice "$value" "$@"; then
+    err "invalid $flag: $value"
+    exit "$EXIT_USAGE"
+  fi
+}
+
+validate_scope_pair() {
+  local scope_type="$1"
+  local scope_value="$2"
+
+  if [[ -z "$scope_type" && -n "$scope_value" ]]; then
+    err "--scope-value requires --scope-type"
+    exit "$EXIT_USAGE"
+  fi
+  if [[ -n "$scope_type" && -z "$scope_value" ]]; then
+    err "--scope-type requires --scope-value"
+    exit "$EXIT_USAGE"
+  fi
+  if [[ -n "$scope_type" ]]; then
+    validate_choice "--scope-type" "$scope_type" market account_group account
+  fi
+}
+
+_load_named_query() {
+  local slug="$1"
+  (
+    cd "$REPO_ROOT"
+    python3 -B -c '
+import sys
+from skills.wealthfolio_query.query import load_query
+
+sys.stdout.write(load_query(sys.argv[1]))
+' "$slug"
+  )
+}
+
+_esc_sq() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+_esc_dq() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+_bind() {
+  local name="$1"
+  local value="$2"
+
+  if [[ "$value" == "__WFQ_NULL__" ]]; then
+    printf '.parameter set :%s NULL\n' "$name"
+  else
+    printf '.parameter set :%s "%s"\n' "$name" "$(_esc_dq "'$(_esc_sq "$value")'")"
+  fi
+}
+
+_run_named_query() {
+  local slug="$1"
+  shift
+
+  local tmp_sql
+  tmp_sql="$(mktemp)"
+  trap 'rm -f "$tmp_sql"' RETURN
+
+  _load_named_query "$slug" >"$tmp_sql"
+  {
+    echo ".bail on"
+    echo ".mode list"
+    echo ".separator |"
+    while [[ $# -gt 0 ]]; do
+      local name="$1"
+      local value="$2"
+      shift 2
+      _bind "$name" "$value"
+    done
+    printf '.read %s\n' "$tmp_sql"
+  } | sqlite3 -readonly "$WEALTHFOLIO_DB"
+}
+
+format_list_holdings() {
+  local format="$1"
+  python3 -B -c '
+import csv
+import json
+import sys
+
+fmt = sys.argv[1]
+columns = [
+    "ticker",
+    "name",
+    "market",
+    "currency",
+    "account",
+    "account_group",
+    "asset_type",
+    "quantity",
+    "avg_cost",
+    "snapshot_price",
+    "snapshot_market_value",
+    "allocation_pct",
+    "unrealized_pl_pct",
+]
+numeric_columns = {
+    "quantity",
+    "avg_cost",
+    "snapshot_price",
+    "snapshot_market_value",
+    "allocation_pct",
+    "unrealized_pl_pct",
+}
+
+raw_rows = []
+json_rows = []
+for line in sys.stdin.read().splitlines():
+    if line == "":
+        continue
+    parts = line.split("|")
+    if len(parts) != len(columns):
+        raise SystemExit(
+            f"expected {len(columns)} list-holdings columns, got {len(parts)}"
+        )
+    raw_rows.append(parts)
+    row = {}
+    for key, value in zip(columns, parts):
+        if value == "":
+            row[key] = None
+        elif key in numeric_columns:
+            row[key] = float(value)
+        else:
+            row[key] = value
+    json_rows.append(row)
+
+if fmt == "json":
+    json.dump(json_rows, sys.stdout, separators=(",", ":"))
+    sys.stdout.write("\n")
+elif fmt == "csv":
+    writer = csv.writer(sys.stdout, lineterminator="\n")
+    writer.writerow(columns)
+    writer.writerows(raw_rows)
+else:
+    raise SystemExit(f"unknown format: {fmt}")
+' "$format"
+}
+
+cmd_list_holdings() {
+  local market="all"
+  local scope_type=""
+  local scope_value=""
+  local format="json"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --market)
+        [[ $# -ge 2 ]] || { err "--market requires a value"; exit "$EXIT_USAGE"; }
+        market="$2"
+        shift 2
+        ;;
+      --scope-type)
+        [[ $# -ge 2 ]] || { err "--scope-type requires a value"; exit "$EXIT_USAGE"; }
+        scope_type="$2"
+        shift 2
+        ;;
+      --scope-value)
+        [[ $# -ge 2 ]] || { err "--scope-value requires a value"; exit "$EXIT_USAGE"; }
+        scope_value="$2"
+        shift 2
+        ;;
+      --format)
+        [[ $# -ge 2 ]] || { err "--format requires a value"; exit "$EXIT_USAGE"; }
+        format="$2"
+        shift 2
+        ;;
+      --*)
+        err "unknown flag for list-holdings: $1"
+        exit "$EXIT_USAGE"
+        ;;
+      *)
+        err "unexpected argument for list-holdings: $1"
+        exit "$EXIT_USAGE"
+        ;;
+    esac
+  done
+
+  validate_choice "--market" "$market" india us all
+  validate_choice "--format" "$format" json csv
+  validate_scope_pair "$scope_type" "$scope_value"
+  if [[ -z "$scope_type" ]]; then
+    scope_type="market"
+    scope_value="all"
+  fi
+
+  _run_named_query list-holdings \
+    market "$market" \
+    scope_type "$scope_type" \
+    scope_value "$scope_value" \
+    | format_list_holdings "$format"
+}
+
+cmd_get_cash_balance() {
+  local currency="all"
+  local scope_type=""
+  local scope_value=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --currency)
+        [[ $# -ge 2 ]] || { err "--currency requires a value"; exit "$EXIT_USAGE"; }
+        currency="$2"
+        shift 2
+        ;;
+      --scope-type)
+        [[ $# -ge 2 ]] || { err "--scope-type requires a value"; exit "$EXIT_USAGE"; }
+        scope_type="$2"
+        shift 2
+        ;;
+      --scope-value)
+        [[ $# -ge 2 ]] || { err "--scope-value requires a value"; exit "$EXIT_USAGE"; }
+        scope_value="$2"
+        shift 2
+        ;;
+      --*)
+        err "unknown flag for get-cash-balance: $1"
+        exit "$EXIT_USAGE"
+        ;;
+      *)
+        err "unexpected argument for get-cash-balance: $1"
+        exit "$EXIT_USAGE"
+        ;;
+    esac
+  done
+
+  validate_choice "--currency" "$currency" INR USD all
+  validate_scope_pair "$scope_type" "$scope_value"
+  if [[ -z "$scope_type" ]]; then
+    scope_type="market"
+    scope_value="all"
+  fi
+
+  local value
+  value="$(_run_named_query get-cash-balance \
+    currency "$currency" \
+    scope_type "$scope_type" \
+    scope_value "$scope_value")"
+  printf '%s\n' "${value:-0.0}"
+}
+
+cmd_get_net_worth() {
+  local market="all"
+  local currency="none"
+  local date="__WFQ_NULL__"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --market)
+        [[ $# -ge 2 ]] || { err "--market requires a value"; exit "$EXIT_USAGE"; }
+        market="$2"
+        shift 2
+        ;;
+      --currency)
+        [[ $# -ge 2 ]] || { err "--currency requires a value"; exit "$EXIT_USAGE"; }
+        currency="$2"
+        shift 2
+        ;;
+      --date)
+        [[ $# -ge 2 ]] || { err "--date requires a value"; exit "$EXIT_USAGE"; }
+        date="$2"
+        shift 2
+        ;;
+      --*)
+        err "unknown flag for get-net-worth: $1"
+        exit "$EXIT_USAGE"
+        ;;
+      *)
+        err "unexpected argument for get-net-worth: $1"
+        exit "$EXIT_USAGE"
+        ;;
+    esac
+  done
+
+  validate_choice "--market" "$market" india us all
+  validate_choice "--currency" "$currency" INR USD none
+  if [[ "$date" != "__WFQ_NULL__" && ! "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    err "invalid --date: $date"
+    exit "$EXIT_USAGE"
+  fi
+
+  local row
+  row="$(_run_named_query get-net-worth \
+    date "$date" \
+    market "$market" \
+    currency "$currency")"
+
+  local base_total
+  local fx_day
+  IFS='|' read -r base_total fx_day <<<"$row"
+  base_total="${base_total:-0.0}"
+
+  if [[ "$currency" == "none" ]]; then
+    printf '%s\n' "$base_total"
+    return
+  fi
+  if [[ -z "${fx_day:-}" || "$fx_day" == "0" || "$fx_day" == "0.0" ]]; then
+    err "FX rate not found for output currency: $currency"
+    exit "$EXIT_DB"
+  fi
+
+  python3 -B -c '
+import sys
+
+print(str(float(sys.argv[1]) / float(sys.argv[2])))
+' "$base_total" "$fx_day"
+}
+
+cmd_get_avg_cost() {
+  if [[ $# -eq 0 ]]; then
+    err "get-avg-cost requires a ticker argument"
+    exit "$EXIT_USAGE"
+  fi
+  if [[ $# -ne 1 ]]; then
+    err "get-avg-cost takes exactly one ticker argument"
+    exit "$EXIT_USAGE"
+  fi
+  if [[ "$1" == --* ]]; then
+    err "unknown flag for get-avg-cost: $1"
+    exit "$EXIT_USAGE"
+  fi
+
+  local ticker="$1"
+  local value
+  value="$(_run_named_query get-avg-cost ticker "$ticker")"
+  if [[ -z "$value" ]]; then
+    err "ticker not in active holdings: $ticker"
+    exit "$EXIT_DB"
+  fi
+  printf '%s\n' "$value"
+}
+
 main() {
   if [[ $# -eq 0 ]]; then
     err "missing subcommand; run 'wealthfolio-query --help' for usage"
@@ -125,9 +475,21 @@ main() {
     export-snapshot)
       placeholder export-snapshot M2.7
       ;;
-    list-holdings|get-cash-balance|get-net-worth|get-avg-cost)
+    list-holdings)
       require_dep sqlite3
-      placeholder "$subcommand" M2.6
+      cmd_list_holdings "$@"
+      ;;
+    get-cash-balance)
+      require_dep sqlite3
+      cmd_get_cash_balance "$@"
+      ;;
+    get-net-worth)
+      require_dep sqlite3
+      cmd_get_net_worth "$@"
+      ;;
+    get-avg-cost)
+      require_dep sqlite3
+      cmd_get_avg_cost "$@"
       ;;
     get-portfolio-twr)
       placeholder get-portfolio-twr M2.8
