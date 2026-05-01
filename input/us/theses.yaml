@@ -1,0 +1,9 @@
+# Per-ticker thesis sidecar for the US market.
+# Schema: SPEC §7.1.2. Keys are canonical Yahoo tickers; values are free-text thesis strings.
+# Missing or empty thesis is valid per SPEC §19.2 invariant 13 (treated as empty, not an error).
+# MVP scaffold — populate as the US roster stabilises.
+
+theses:
+  AAPL: ""      # Apple
+  BRK.B: ""     # Berkshire Hathaway Class B
+  ARKK: ""      # ARK Innovation ETF

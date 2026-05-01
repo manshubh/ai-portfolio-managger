@@ -289,6 +289,10 @@ ORDER BY ticker, account
 --          assets) falls back to `stock`. assets.instrument_type alone is too coarse
 --          because upstream lumps stocks/ETFs/funds into the same provider-routing
 --          enum (`EQUITY`).
+--
+--          Final ORDER BY ticker, account makes consecutive runs against the same
+--          DB state byte-identical (required by the M9 snapshot-freeze invariant
+--          and M2.7's byte-identical re-run test).
 -- name: export-snapshot
 WITH latest_snapshot AS (
     SELECT hs.*
@@ -398,6 +402,7 @@ SELECT
       ELSE (snapshot_price - avg_cost) * 1.0 / avg_cost
     END AS unrealized_pl_pct
 FROM filtered
+ORDER BY ticker, account
 ;
 
 

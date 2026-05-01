@@ -418,6 +418,13 @@ print(str(float(sys.argv[1]) / float(sys.argv[2])))
 ' "$base_total" "$fx_day"
 }
 
+cmd_export_snapshot() {
+  # Stay in the caller's CWD so --theses/--output relative paths resolve as
+  # the user expects. PYTHONPATH lets `python3 -m` find the package without cd.
+  PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+    exec python3 -B -m skills.wealthfolio_query.export_snapshot "$@"
+}
+
 cmd_get_avg_cost() {
   if [[ $# -eq 0 ]]; then
     err "get-avg-cost requires a ticker argument"
@@ -473,7 +480,7 @@ main() {
 
   case "$subcommand" in
     export-snapshot)
-      placeholder export-snapshot M2.7
+      cmd_export_snapshot "$@"
       ;;
     list-holdings)
       require_dep sqlite3

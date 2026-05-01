@@ -1,0 +1,11 @@
+# Test sidecar for tests/wealthfolio_query/test_export_snapshot.sh.
+# Exercises CSV escaping: commas, embedded quotes, multi-line bodies.
+
+theses:
+  RELIANCE.NS: "Energy + retail + telecom; also, jio."
+  TCS.BO: |
+    Multi-line
+    thesis with "quotes" and, commas.
+  INFY.NS: ""
+  NIFTYBEES.NS: ""
+  PMSCORE.NS: ""
