@@ -84,14 +84,6 @@ validate_schema() {
   fi
 }
 
-placeholder() {
-  # Recognized subcommand whose body lands in a later M2 task.
-  local subcommand="$1"
-  local owner="$2"
-  err "$subcommand is recognized but not implemented in M2.4 — body lands in $owner"
-  exit "$EXIT_DB"
-}
-
 is_choice() {
   local value="$1"
   shift
@@ -425,6 +417,11 @@ cmd_export_snapshot() {
     exec python3 -B -m skills.wealthfolio_query.export_snapshot "$@"
 }
 
+cmd_get_portfolio_twr() {
+  PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+    exec python3 -B -m skills.wealthfolio_query.portfolio_twr "$@"
+}
+
 cmd_get_avg_cost() {
   if [[ $# -eq 0 ]]; then
     err "get-avg-cost requires a ticker argument"
@@ -499,7 +496,7 @@ main() {
       cmd_get_avg_cost "$@"
       ;;
     get-portfolio-twr)
-      placeholder get-portfolio-twr M2.8
+      cmd_get_portfolio_twr "$@"
       ;;
   esac
 }
