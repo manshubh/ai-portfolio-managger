@@ -6,16 +6,17 @@ Authoritative behavior lives in [`docs/SPEC.md §6.3, §7.6, §8.2–§8.6, §9,
 
 ## Status
 
-This skill is being built milestone-by-milestone. **M3.2 has shipped only the CLI shell** — every subcommand handler is currently a no-op that exits with code 2 and a `{"error":"not_implemented"}` JSON body on stderr. The argparse surface, `--help` strings, flags, and exit-code matrix are real and stable. Real handlers land in:
+This skill is being built milestone-by-milestone. **M3.3 has landed `check-thresholds` + `persona --persona my-philosophy`** — both handlers dispatch to `my_philosophy.py`, producing deterministic JSON output per SPEC §9.3. Other subcommands still no-op with exit 2 and a `{"error":"not_implemented"}` body on stderr. Real handlers land in:
 
-| Subtask | Lands |
+| Subtask | Status |
 |---|---|
-| `check-thresholds`, `persona --persona my-philosophy` | M3.3 |
-| `metrics.json` schema extension (`history.line_items[]`, governance/thesis flags) | M3.4 |
-| `lib/line_items.py` adapter | M3.5 |
-| `persona --persona {jhunjhunwala,buffett,munger,pabrai}` | M3.6 – M3.9 |
-| `concentration-check` + `risk_manager.py` port + `prices.json` shape | M3.10 |
-| `full` (combines `check-thresholds` + `my-philosophy`) | M3.11 |
+| CLI shell + argparse surface + exit-code matrix | M3.2 ✓ |
+| `check-thresholds`, `persona --persona my-philosophy` | M3.3 ✓ |
+| `metrics.json` schema extension (`history.line_items[]`, governance/thesis flags) | M3.4 (pending) |
+| `lib/line_items.py` adapter | M3.5 (pending) |
+| `persona --persona {jhunjhunwala,buffett,munger,pabrai}` | M3.6 – M3.9 (pending) |
+| `concentration-check` + `risk_manager.py` port + `prices.json` shape | M3.10 (pending) |
+| `full` (combines `check-thresholds` + `my-philosophy`) | M3.11 (pending) |
 
 ## Hyphen → underscore directory note
 

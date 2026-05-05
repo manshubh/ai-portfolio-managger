@@ -1,0 +1,19 @@
+{
+  "ticker": "INFY",
+  "as_of": "2026-04-17",
+  "fund": {
+    "revenue_yoy_pct": 5.8,
+    "pat_yoy_pct": 8.2,
+    "de_ratio": 0.05,
+    "promoter_pct": 14.5,
+    "pledge_pct": 0,
+    "roe_pct": 28.7,
+    "roce_pct": 35.0,
+    "revenue_cagr_3y_pct": 14.2,
+    "pat_cagr_3y_pct": 8.2,
+    "fcf_positive": true,
+    "mcap_cr": 720000
+  },
+  "governance_red_flag": false,
+  "user_thesis_exit": false
+}

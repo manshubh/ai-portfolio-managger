@@ -1,0 +1,7 @@
+# Dev-only dependencies (tests + lint). Install with:
+#   pip install -r requirements-dev.txt
+#
+# Skill runtime deps live under skills/<skill>/requirements.txt.
+
+pytest>=8.0
+ruff>=0.6

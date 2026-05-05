@@ -1,9 +1,8 @@
 """scoring-engine CLI shell — see docs/SPEC.md §18.3.
 
-M3.2 lands the argparse surface and exit-code matrix only; subcommand
-handlers are no-ops that exit 2 ("not implemented yet"). Real handlers
-land in M3.3 (check-thresholds + my-philosophy persona), M3.6-M3.9
-(persona ports), M3.10 (concentration-check), M3.11 (full).
+M3.2 shipped the argparse surface + exit-code matrix.
+M3.3 wires `check-thresholds` and `persona --persona my-philosophy` to
+`my_philosophy.py`. Other subcommands remain no-ops pending M3.6–M3.11.
 """
 
 from __future__ import annotations
@@ -12,6 +11,8 @@ import argparse
 import json
 import sys
 from typing import NoReturn
+
+from skills.scoring_engine import my_philosophy
 
 EXIT_OK = 0
 EXIT_BAD_INPUT = 1
@@ -27,20 +28,47 @@ def _not_implemented(subcommand: str, lands_in: str) -> NoReturn:
         "subcommand": subcommand,
         "lands_in": lands_in,
         "message": (
-            f"M3.2 ships the CLI shell only; `{subcommand}` handler is a no-op "
-            f"and will be wired in {lands_in}."
+            f"`{subcommand}` handler is not yet implemented; lands in {lands_in}."
         ),
     }
     print(json.dumps(err), file=sys.stderr)
     sys.exit(EXIT_INTERNAL)
 
 
-def _handle_check_thresholds(_args: argparse.Namespace) -> NoReturn:
-    _not_implemented("check-thresholds", "M3.3")
+def _emit(payload: dict) -> NoReturn:
+    print(json.dumps(payload))
+    sys.exit(EXIT_OK)
 
 
-def _handle_persona(_args: argparse.Namespace) -> NoReturn:
-    _not_implemented("persona", "M3.3 (my-philosophy) / M3.6-M3.9 (rotating personas)")
+def _handle_check_thresholds(args: argparse.Namespace) -> NoReturn:
+    philosophy = my_philosophy.load_philosophy(args.philosophy)
+    metrics = my_philosophy.load_metrics(args.metrics)
+    result = my_philosophy.check_thresholds(
+        philosophy, metrics, args.scheme, args.sector_exception,
+    )
+    _emit(result)
+
+
+def _handle_persona(args: argparse.Namespace) -> NoReturn:
+    if args.persona != "my-philosophy":
+        _not_implemented(
+            f"persona --persona {args.persona}",
+            "M3.6–M3.9 (rotating persona ports)",
+        )
+    missing = [flag for flag, val in [("--philosophy", args.philosophy),
+                                       ("--scheme", args.scheme)] if not val]
+    if missing:
+        print(json.dumps({
+            "error": "missing_flag",
+            "message": f"{', '.join(missing)} required for persona --persona my-philosophy",
+        }), file=sys.stderr)
+        sys.exit(EXIT_BAD_INPUT)
+    philosophy = my_philosophy.load_philosophy(args.philosophy)
+    metrics = my_philosophy.load_metrics(args.metrics)
+    result = my_philosophy.persona_my_philosophy(
+        philosophy, metrics, args.scheme, args.sector_exception,
+    )
+    _emit(result)
 
 
 def _handle_concentration_check(_args: argparse.Namespace) -> NoReturn:
@@ -103,6 +131,12 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Persona to run (MVP roster per investigation §4).")
     p_pe.add_argument("--metrics", required=True, metavar="<path>",
                      help="Path to metrics.json.")
+    p_pe.add_argument("--philosophy", metavar="<path>", default=None,
+                     help="Path to philosophy.md (required for --persona my-philosophy).")
+    p_pe.add_argument("--scheme", choices=SCHEMES, default=None,
+                     help="Threshold scheme (required for --persona my-philosophy).")
+    p_pe.add_argument("--sector-exception", metavar="<name>", default=None,
+                     help="Optional sector exception key (my-philosophy only).")
     p_pe.add_argument("--price-context", metavar="<path>", default=None,
                      help="Optional price-context JSON (e.g. for technicals).")
     p_pe.set_defaults(func=_handle_persona)

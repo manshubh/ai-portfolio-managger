@@ -8,6 +8,10 @@
 __pycache__/
 *.pyc
 
+# Local venv for running skill test suites
+.venv/
+.pytest_cache/
+
 # Scratch paste files from user-executed MCP smoke sessions (M0.3)
 temp/
 

@@ -750,7 +750,7 @@ Before the LLM produces qualitative scoring, `scoring-engine` runs deterministic
   "pass_count": 8,
   "fail_count": 1,
   "dealbreakers_triggered": [],
-  "philosophy_fit_graded": 1
+  "philosophy_fit_graded": 8
 }
 ```
 

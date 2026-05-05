@@ -1,0 +1,19 @@
+{
+  "ticker": "ZEROPROMO",
+  "as_of": "2026-04-17",
+  "fund": {
+    "revenue_yoy_pct": 15.0,
+    "pat_yoy_pct": 18.0,
+    "de_ratio": 0.2,
+    "promoter_pct": 0,
+    "pledge_pct": 0,
+    "roe_pct": 20.0,
+    "roce_pct": 24.0,
+    "revenue_cagr_3y_pct": 14.0,
+    "pat_cagr_3y_pct": 16.0,
+    "fcf_positive": true,
+    "mcap_cr": 12000
+  },
+  "governance_red_flag": false,
+  "user_thesis_exit": false
+}

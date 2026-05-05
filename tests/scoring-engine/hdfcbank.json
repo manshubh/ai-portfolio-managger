@@ -1,0 +1,18 @@
+{
+  "ticker": "HDFCBANK",
+  "as_of": "2026-04-17",
+  "fund": {
+    "roa_pct": 1.8,
+    "roe_pct": 16.5,
+    "nnpa_pct": 0.4,
+    "car_pct": 18.2,
+    "casa_pct": 42.0,
+    "nim_pct": 2.8,
+    "pat_cagr_3y_pct": 18.0,
+    "promoter_pct": 35.2,
+    "pledge_pct": 0,
+    "mcap_cr": 1200000
+  },
+  "governance_red_flag": false,
+  "user_thesis_exit": false
+}

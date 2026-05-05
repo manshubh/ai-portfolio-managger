@@ -1,0 +1,19 @@
+{
+  "ticker": "BSE",
+  "as_of": "2026-04-17",
+  "fund": {
+    "revenue_yoy_pct": 22.0,
+    "pat_yoy_pct": 30.0,
+    "de_ratio": 0.0,
+    "promoter_pct": 0,
+    "pledge_pct": 0,
+    "roe_pct": 22.0,
+    "roce_pct": 28.0,
+    "revenue_cagr_3y_pct": 18.0,
+    "pat_cagr_3y_pct": 25.0,
+    "fcf_positive": true,
+    "mcap_cr": 18000
+  },
+  "governance_red_flag": false,
+  "user_thesis_exit": false
+}
