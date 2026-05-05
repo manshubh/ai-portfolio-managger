@@ -37,14 +37,19 @@ Subcommands (SPEC §18.1):
     --scope-type market|account_group|account \
     --scope-value <value> \
     [--theses input/{market}/theses.yaml] \
-    [--output temp/research/portfolio-snapshot.csv]
+    [--output temp/research/portfolio-snapshot.csv] \
+    [--strict-scope]
       → CSV matching SPEC §7.1.1, with thesis column populated.
 
-  list-holdings    [--market india|us|all] [--scope-type ...] [--scope-value ...] [--format json|csv]
-  get-cash-balance [--currency INR|USD|all] [--scope-type ...] [--scope-value ...]
+  list-holdings    [--market india|us|all] [--scope-type ...] [--scope-value ...] [--format json|csv] [--strict-scope]
+  get-cash-balance [--currency INR|USD|all] [--scope-type ...] [--scope-value ...] [--strict-scope]
   get-net-worth    [--market india|us|all] [--date <YYYY-MM-DD>] [--currency INR|USD]
   get-avg-cost     <ticker>
   get-portfolio-twr --market <...> --start <date> --end <date>
+
+  --strict-scope  Validate the scope pair before running the query and exit 2
+                  if no active accounts (or market literal) match. Accepted
+                  only on export-snapshot, list-holdings, get-cash-balance.
 
 Environment:
   WEALTHFOLIO_DB   Absolute path to the Wealthfolio SQLite database. Required
@@ -119,6 +124,57 @@ validate_scope_pair() {
   if [[ -n "$scope_type" ]]; then
     validate_choice "--scope-type" "$scope_type" market account_group account
   fi
+}
+
+# Verify the scope pair matches at least one active account (or one of the
+# allowed market literals). Exits 2 with a clear stderr on miss. Caller must
+# have already passed scope_type/scope_value through validate_scope_pair.
+_strict_scope_validate() {
+  local scope_type="$1"
+  local scope_value="$2"
+
+  case "$scope_type" in
+    market)
+      if ! is_choice "$scope_value" india us; then
+        err "scope market=$scope_value is not one of {india, us}"
+        exit "$EXIT_DB"
+      fi
+      ;;
+    account_group)
+      local hit
+      hit="$(_run_named_query validate-scope-account-group scope_value "$scope_value")"
+      if [[ -z "$hit" ]]; then
+        err "scope account_group=$scope_value matches no active accounts"
+        exit "$EXIT_DB"
+      fi
+      ;;
+    account)
+      local hit
+      hit="$(_run_named_query validate-scope-account scope_value "$scope_value")"
+      if [[ -z "$hit" ]]; then
+        err "scope account=$scope_value matches no active accounts"
+        exit "$EXIT_DB"
+      fi
+      ;;
+    *)
+      err "internal error: unknown scope_type for --strict-scope: $scope_type"
+      exit "$EXIT_USAGE"
+      ;;
+  esac
+}
+
+# Reject --strict-scope on subcommands that don't accept it (SPEC §6.8 +
+# investigation §6: only export-snapshot, list-holdings, get-cash-balance carry
+# scope params). Call from the top of cmd_get_net_worth / cmd_get_avg_cost /
+# cmd_get_portfolio_twr.
+reject_strict_scope() {
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == "--strict-scope" ]]; then
+      err "--strict-scope only applies to scoped subcommands (export-snapshot, list-holdings, get-cash-balance)"
+      exit "$EXIT_USAGE"
+    fi
+  done
 }
 
 _load_named_query() {
@@ -246,6 +302,7 @@ cmd_list_holdings() {
   local scope_type=""
   local scope_value=""
   local format="json"
+  local strict_scope=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -269,6 +326,10 @@ cmd_list_holdings() {
         format="$2"
         shift 2
         ;;
+      --strict-scope)
+        strict_scope=1
+        shift
+        ;;
       --*)
         err "unknown flag for list-holdings: $1"
         exit "$EXIT_USAGE"
@@ -283,6 +344,13 @@ cmd_list_holdings() {
   validate_choice "--market" "$market" india us all
   validate_choice "--format" "$format" json csv
   validate_scope_pair "$scope_type" "$scope_value"
+  if [[ "$strict_scope" -eq 1 && -z "$scope_type" ]]; then
+    err "--strict-scope requires --scope-type and --scope-value"
+    exit "$EXIT_USAGE"
+  fi
+  if [[ "$strict_scope" -eq 1 ]]; then
+    _strict_scope_validate "$scope_type" "$scope_value"
+  fi
   if [[ -z "$scope_type" ]]; then
     scope_type="market"
     scope_value="all"
@@ -299,6 +367,7 @@ cmd_get_cash_balance() {
   local currency="all"
   local scope_type=""
   local scope_value=""
+  local strict_scope=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -317,6 +386,10 @@ cmd_get_cash_balance() {
         scope_value="$2"
         shift 2
         ;;
+      --strict-scope)
+        strict_scope=1
+        shift
+        ;;
       --*)
         err "unknown flag for get-cash-balance: $1"
         exit "$EXIT_USAGE"
@@ -330,6 +403,13 @@ cmd_get_cash_balance() {
 
   validate_choice "--currency" "$currency" INR USD all
   validate_scope_pair "$scope_type" "$scope_value"
+  if [[ "$strict_scope" -eq 1 && -z "$scope_type" ]]; then
+    err "--strict-scope requires --scope-type and --scope-value"
+    exit "$EXIT_USAGE"
+  fi
+  if [[ "$strict_scope" -eq 1 ]]; then
+    _strict_scope_validate "$scope_type" "$scope_value"
+  fi
   if [[ -z "$scope_type" ]]; then
     scope_type="market"
     scope_value="all"
@@ -344,6 +424,7 @@ cmd_get_cash_balance() {
 }
 
 cmd_get_net_worth() {
+  reject_strict_scope "$@"
   local market="all"
   local currency="none"
   local date="__WFQ_NULL__"
@@ -411,18 +492,62 @@ print(str(float(sys.argv[1]) / float(sys.argv[2])))
 }
 
 cmd_export_snapshot() {
+  # Pre-flight --strict-scope in shell so the validator runs against the named
+  # query and the flag is consumed before we exec into Python. Python helper
+  # is unchanged. Argument parsing here is a minimal pre-pass that preserves
+  # all other flags for argparse on the Python side.
+  local strict_scope=0
+  local scope_type=""
+  local scope_value=""
+  local -a forwarded=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --strict-scope)
+        strict_scope=1
+        shift
+        ;;
+      --scope-type)
+        [[ $# -ge 2 ]] || { err "--scope-type requires a value"; exit "$EXIT_USAGE"; }
+        scope_type="$2"
+        forwarded+=("$1" "$2")
+        shift 2
+        ;;
+      --scope-value)
+        [[ $# -ge 2 ]] || { err "--scope-value requires a value"; exit "$EXIT_USAGE"; }
+        scope_value="$2"
+        forwarded+=("$1" "$2")
+        shift 2
+        ;;
+      *)
+        forwarded+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [[ "$strict_scope" -eq 1 ]]; then
+    if [[ -z "$scope_type" || -z "$scope_value" ]]; then
+      err "--strict-scope requires --scope-type and --scope-value"
+      exit "$EXIT_USAGE"
+    fi
+    validate_choice "--scope-type" "$scope_type" market account_group account
+    _strict_scope_validate "$scope_type" "$scope_value"
+  fi
+
   # Stay in the caller's CWD so --theses/--output relative paths resolve as
   # the user expects. PYTHONPATH lets `python3 -m` find the package without cd.
   PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
-    exec python3 -B -m skills.wealthfolio_query.export_snapshot "$@"
+    exec python3 -B -m skills.wealthfolio_query.export_snapshot "${forwarded[@]}"
 }
 
 cmd_get_portfolio_twr() {
+  reject_strict_scope "$@"
   PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" \
     exec python3 -B -m skills.wealthfolio_query.portfolio_twr "$@"
 }
 
 cmd_get_avg_cost() {
+  reject_strict_scope "$@"
   if [[ $# -eq 0 ]]; then
     err "get-avg-cost requires a ticker argument"
     exit "$EXIT_USAGE"

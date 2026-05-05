@@ -461,6 +461,29 @@ FROM matched
 
 
 -- =============================================================================
+-- Validation queries (used by --strict-scope; see SPEC §6.8 + M2 investigation §6)
+-- =============================================================================
+-- name: validate-scope-account-group
+SELECT 1
+FROM accounts
+WHERE is_active   = 1
+  AND is_archived = 0
+  AND "group"     = :scope_value
+LIMIT 1
+;
+
+
+-- name: validate-scope-account
+SELECT 1
+FROM accounts
+WHERE is_active   = 1
+  AND is_archived = 0
+  AND name        = :scope_value
+LIMIT 1
+;
+
+
+-- =============================================================================
 -- get-portfolio-twr — SPEC §6.8
 -- =============================================================================
 -- params:  :market  (india|us)
