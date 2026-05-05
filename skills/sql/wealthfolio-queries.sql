@@ -28,6 +28,13 @@
 --   Scope filter (SPEC §6.8 tri-mode):
 --     scope_type IN ('market','account_group','account'); `accounts."group"` is
 --     always quoted (reserved word in SQLite).
+--   TOTAL pseudo-account rows:
+--     holdings_snapshots and daily_account_valuation each carry a `TOTAL`
+--     pseudo-account_id row alongside real-UUID rows (observed live in v3.3.0,
+--     M2.14). Every query below JOINs accounts, which naturally drops TOTAL
+--     because it won't match accounts.id. Any new query added here MUST JOIN
+--     accounts or filter account_id != 'TOTAL' explicitly — otherwise aggregate
+--     reads will double-count.
 --
 -- Position JSON shape pinned from Wealthfolio v3.2.1 commit 23bc0887:
 -- AccountStateSnapshot.positions is asset_id -> Position; Position uses camelCase serde.
