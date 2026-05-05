@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 REPO_ROOT="$(cd ../.. && pwd)"
 FIXTURE_DB="$PWD/fixture.db"
-SCHEMA_FILE="$REPO_ROOT/research/wealthfolio-schema-v3.2.1.txt"
+SCHEMA_FILE="$REPO_ROOT/research/wealthfolio-schema-v3.3.0.txt"
 
 fail() {
   printf 'FAIL  %s\n' "$*" >&2

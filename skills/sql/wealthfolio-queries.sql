@@ -1,8 +1,10 @@
--- version: wealthfolio v3.2.1 (build 20260301.1)
--- schema-ref: research/wealthfolio-schema-v3.2.1.txt
+-- version: wealthfolio v3.3.0 (build 20260301.1)
+-- schema-ref: research/wealthfolio-schema-v3.3.0.txt
 -- mode: holdings-only (no reads from the `activities` table — see SPEC §5.2)
 -- binding: SQLite named parameters (:param)
--- fidelity: Position JSON shape is pinned to Wealthfolio v3.2.1
+-- fidelity: Position JSON shape is pinned to Wealthfolio v3.2.1 (carried forward to v3.3.0;
+--           v3.3.0 schema drift is confined to goals/goals_allocation/goal_plans/
+--           sync_entity_metadata — none of which these queries read)
 --           (commit 23bc088778898a499aab658694e2e2a8c1d208f1; see Position
 --           provenance block below). Multi-currency-per-account cash and TWR
 --           chaining are delegated to later M2 subtasks (M2.7, M2.8).

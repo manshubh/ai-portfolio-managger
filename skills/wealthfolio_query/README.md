@@ -2,7 +2,7 @@
 
 Read-only wrapper around named SQL queries against the Wealthfolio SQLite database. Single entry point for every Wealthfolio read in the system ([SPEC §5.3, §6.8, §17, §18.1](../../docs/SPEC.md)).
 
-Named queries live in [skills/sql/wealthfolio-queries.sql](../sql/wealthfolio-queries.sql), keyed by `-- name: <slug>` markers and pinned to Wealthfolio v3.2.1 via a `-- version:` header that the wrapper sanity-checks at startup.
+Named queries live in [skills/sql/wealthfolio-queries.sql](../sql/wealthfolio-queries.sql), keyed by `-- name: <slug>` markers and pinned to Wealthfolio v3.3.0 via a `-- version:` header that the wrapper sanity-checks at startup.
 
 ## 1. Invocation
 
@@ -118,7 +118,7 @@ Three layers of defense against accidental writes ([SPEC §19.2 invariant 11](..
 
 ## 8. Schema-version pin
 
-The SQL file opens with `-- version: wealthfolio v3.2.1 (build 20260301.1)`. The wrapper diffs this against the pin in [config/wealthfolio.md](../../config/wealthfolio.md) at startup; mismatch → exit 2 with a clear message ([SPEC §19.2 invariant 14](../../docs/SPEC.md)). The canonical schema dump lives at [research/wealthfolio-schema-v3.2.1.txt](../../research/wealthfolio-schema-v3.2.1.txt); test [test_schema.sh](../../tests/wealthfolio_query/test_schema.sh) diffs the fixture against it on every run.
+The SQL file opens with `-- version: wealthfolio v3.3.0 (build 20260301.1)`. The wrapper diffs this against the pin in [config/wealthfolio.md](../../config/wealthfolio.md) at startup; mismatch → exit 2 with a clear message ([SPEC §19.2 invariant 14](../../docs/SPEC.md)). The canonical schema dump lives at [research/wealthfolio-schema-v3.3.0.txt](../../research/wealthfolio-schema-v3.3.0.txt); test [test_schema.sh](../../tests/wealthfolio_query/test_schema.sh) diffs the fixture against it on every run.
 
 ## 9. Tests
 

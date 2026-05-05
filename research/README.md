@@ -12,7 +12,7 @@ Naming convention: `<topic>-<version-or-shortsha>.<ext>`.
 
 Examples present today:
 
-- [`wealthfolio-schema-v3.2.1.txt`](./wealthfolio-schema-v3.2.1.txt) — Diesel schema dump. Produced by [M0.1](../plans/M0/M0.1-wealthfolio.md). Consumed by M0.7 (SQL stub) and M0.4 (`THIRD_PARTY.md`).
+- [`wealthfolio-schema-v3.3.0.txt`](./wealthfolio-schema-v3.3.0.txt) — Diesel schema dump. Produced by [M0.1](../plans/M0/M0.1-wealthfolio.md); re-pinned to v3.3.0 by M2.13 (`ai-portfolio-manager-wjw`). Consumed by M0.7 (SQL stub) and M0.4 (`THIRD_PARTY.md`).
 - [`ai-hedge-fund-pin-0f6ac48.md`](./ai-hedge-fund-pin-0f6ac48.md) — Upstream SHA pin manifest with license snapshot and port-target verification. Produced by [M0.2](../plans/M0/M0.2-ai-hedge-fund-pin.md). Consumed by M0.4 (`THIRD_PARTY.md`) and M3 (scoring-engine port).
 
 A file belongs in Tier 1 when:

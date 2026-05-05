@@ -158,14 +158,14 @@ SOFTWARE.
 
 ## 5. External data consumers
 
-### 5.1 Wealthfolio v3.2.1 (consumed-but-not-vendored)
+### 5.1 Wealthfolio v3.3.0 (consumed-but-not-vendored)
 
-We read the Wealthfolio SQLite database read-only via `sqlite3 -readonly` and consume a small set of named queries defined in `skills/sql/wealthfolio-queries.sql`. We do **not** vendor, modify, or redistribute any Wealthfolio source code, UI assets, or migrations — this project's relationship to Wealthfolio is strictly that of a passive consumer of the locally-installed app's on-disk state. The pinned consumer-side artifact is the schema dump at [research/wealthfolio-schema-v3.2.1.txt](research/wealthfolio-schema-v3.2.1.txt), not Wealthfolio's own source.
+We read the Wealthfolio SQLite database read-only via `sqlite3 -readonly` and consume a small set of named queries defined in `skills/sql/wealthfolio-queries.sql`. We do **not** vendor, modify, or redistribute any Wealthfolio source code, UI assets, or migrations — this project's relationship to Wealthfolio is strictly that of a passive consumer of the locally-installed app's on-disk state. The pinned consumer-side artifact is the schema dump at [research/wealthfolio-schema-v3.3.0.txt](research/wealthfolio-schema-v3.3.0.txt), not Wealthfolio's own source.
 
 | Field | Value |
 |---|---|
 | Product | Wealthfolio (Tauri desktop app, macOS bundle) |
-| Version (`CFBundleShortVersionString`) | `3.2.1` |
+| Version (`CFBundleShortVersionString`) | `3.3.0` |
 | Build (`CFBundleVersion`) | `20260301.1` |
 | Upstream | <https://github.com/afadil/wealthfolio> |
 | Upstream LICENSE | <https://github.com/afadil/wealthfolio/blob/main/LICENSE> |
@@ -189,3 +189,4 @@ Who owns what, and when entries change:
 | Date | Section | Change |
 |---|---|---|
 | 2026-04-23 | All | Initial write. Five pins (§2.1 ai-hedge-fund @ `0f6ac48`; §3.1 finstack-mcp 0.10.0; §3.2 nsekit-mcp 0.0.22; §3.3 nse-bse-mcp 0.1.5; §5.1 Wealthfolio v3.2.1) plus §4.1 `uv` runtime prerequisite. MIT bodies for §2.1, §3.1, §3.3 captured; §3.2 no-license disclosure mirrors `config/mcp-servers.md §5`; §5.1 no license body inlined (consumed-but-not-vendored). Produced by [plans/M0/M0.4-third-party.md](plans/M0/M0.4-third-party.md). |
+| 2026-05-05 | §5.1 | Wealthfolio upgrade v3.2.1 → v3.3.0 (build `20260301.1` unchanged). Schema drift confined to `goals` / `goals_allocation` / `goal_plans` (new) / `sync_entity_metadata.last_op` (new column); none of these are read by `skills/sql/wealthfolio-queries.sql`, so no query edits needed. Schema dump renamed `research/wealthfolio-schema-v3.2.1.txt` → `wealthfolio-schema-v3.3.0.txt`. Position JSON shape pin carried forward unchanged (live re-verification deferred to M2.14). Produced by bd `ai-portfolio-manager-wjw` (M2.13). |

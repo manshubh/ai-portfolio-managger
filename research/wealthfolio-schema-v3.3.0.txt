@@ -25,15 +25,8 @@ CREATE TABLE IF NOT EXISTS "goals" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "title" TEXT NOT NULL,
     "description" TEXT,
-    "target_amount" NUMERIC NOT NULL DEFAULT 0, "is_achieved" BOOLEAN NOT NULL DEFAULT false);
-CREATE TABLE IF NOT EXISTS "goals_allocation" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "percent_allocation" INTEGER NOT NULL,
-    "goal_id" TEXT NOT NULL,
-    "account_id" TEXT NOT NULL,
-    CONSTRAINT "account_goal_allocation_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "account_goal_allocation_goal_id_fkey" FOREIGN KEY ("goal_id") REFERENCES "goals" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
+    "target_amount" NUMERIC NOT NULL DEFAULT 0, goal_type TEXT NOT NULL DEFAULT 'custom_save_up', status_lifecycle TEXT NOT NULL DEFAULT 'active'
+    CHECK (status_lifecycle IN ('active', 'achieved', 'archived')), status_health TEXT NOT NULL DEFAULT 'not_applicable', priority INTEGER NOT NULL DEFAULT 0, cover_image_key TEXT, currency TEXT, start_date TEXT, target_date TEXT, summary_current_value REAL, summary_progress REAL, projected_completion_date TEXT, projected_value_at_target_date REAL, summary_target_amount REAL, created_at TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS "app_settings" (
     "setting_key" TEXT NOT NULL PRIMARY KEY,
     "setting_value" TEXT NOT NULL
@@ -399,7 +392,7 @@ CREATE TABLE sync_entity_metadata (
     entity_id TEXT NOT NULL,
     last_event_id TEXT NOT NULL,
     last_client_timestamp TEXT NOT NULL,
-    last_seq BIGINT NOT NULL DEFAULT 0,
+    last_seq BIGINT NOT NULL DEFAULT 0, last_op TEXT NOT NULL DEFAULT 'update',
     PRIMARY KEY (entity, entity_id)
 );
 CREATE TABLE sync_device_config (
@@ -473,3 +466,28 @@ CREATE TABLE market_data_custom_providers (
     created_at  TEXT    NOT NULL,
     updated_at  TEXT    NOT NULL
 );
+CREATE TABLE goal_plans (
+    goal_id TEXT NOT NULL PRIMARY KEY,
+    plan_kind TEXT NOT NULL,
+    planner_mode TEXT,
+    settings_json TEXT NOT NULL DEFAULT '{}',
+    summary_json TEXT NOT NULL DEFAULT '{}',
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    CONSTRAINT goal_plans_goal_id_fkey FOREIGN KEY (goal_id)
+        REFERENCES goals (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS "goals_allocation" (
+    id TEXT NOT NULL PRIMARY KEY,
+    goal_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    share_percent REAL NOT NULL DEFAULT 0 CHECK (share_percent >= 0 AND share_percent <= 100),
+    tax_bucket TEXT,
+    created_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (goal_id) REFERENCES goals (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES accounts (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX idx_goals_allocation_goal_account
+    ON goals_allocation(goal_id, account_id);

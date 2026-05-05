@@ -2,7 +2,7 @@
 -- Anchor date: 2026-04-30; valuation window: 2026-01-30..2026-04-30.
 -- ID conventions: acct_* for accounts, asset_* for assets, quote_* for quotes.
 -- This file contains seed INSERTs only. The schema is loaded from
--- research/wealthfolio-schema-v3.2.1.txt by build_fixture.sh.
+-- research/wealthfolio-schema-v3.3.0.txt by build_fixture.sh.
 
 BEGIN TRANSACTION;
 

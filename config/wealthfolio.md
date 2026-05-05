@@ -1,6 +1,6 @@
 # Wealthfolio — install, DB path, and Docker mount contract
 
-> Version pinned: **v3.2.1** (bundle build `20260301.1`). See [THIRD_PARTY.md](../THIRD_PARTY.md) (M0.4) for the canonical pin list. Upgrades are a separate `bd` ticket per [SPEC §19.14](../docs/SPEC.md).
+> Version pinned: **v3.3.0** (bundle build `20260301.1`). See [THIRD_PARTY.md](../THIRD_PARTY.md) (M0.4) for the canonical pin list. Upgrades are a separate `bd` ticket per [SPEC §19.14](../docs/SPEC.md).
 
 ## 1. What Wealthfolio is
 
@@ -32,7 +32,7 @@ Verify the installed version matches the pin:
 
 ```bash
 defaults read /Applications/Wealthfolio.app/Contents/Info.plist CFBundleShortVersionString
-# expected: 3.2.1
+# expected: 3.3.0
 
 defaults read /Applications/Wealthfolio.app/Contents/Info.plist CFBundleVersion
 # expected: 20260301.1
@@ -121,9 +121,9 @@ Before running any agent scan or skill that reads the Wealthfolio DB:
 
 | Field | Value |
 |---|---|
-| Version (`CFBundleShortVersionString`) | `3.2.1` |
+| Version (`CFBundleShortVersionString`) | `3.3.0` |
 | Build (`CFBundleVersion`) | `20260301.1` |
-| Schema dump | [`research/wealthfolio-schema-v3.2.1.txt`](../research/wealthfolio-schema-v3.2.1.txt) |
+| Schema dump | [`research/wealthfolio-schema-v3.3.0.txt`](../research/wealthfolio-schema-v3.3.0.txt) |
 | Bundle ID | `com.teymz.wealthfolio` |
 | Upstream | <https://github.com/afadil/wealthfolio> |
 

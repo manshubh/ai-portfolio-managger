@@ -857,7 +857,7 @@ Seven phases, sharded for parallelism where expensive.
 2. Validate the requested scope against active Wealthfolio accounts / account groups.
 3. Read `input/{market}/philosophy.md` and parse YAML front-matter.
 4. Read `input/{market}/theses.yaml` if present. Missing file is allowed and means all thesis values default empty.
-5. `wealthfolio-query export-snapshot --market {market} --scope-type {scope_type} --scope-value {scope_value} --theses input/{market}/theses.yaml --output temp/research/portfolio-snapshot.csv` → frozen holdings snapshot. The command should also print or preview the exported rows for user review, but there is no mandatory confirmation gate.
+5. `wealthfolio-query export-snapshot --market {market} --scope-type {scope_type} --scope-value {scope_value} --theses input/{market}/theses.yaml --output temp/research/portfolio-snapshot.csv` → frozen holdings snapshot. User reviews `temp/research/portfolio-snapshot.csv` before proceeding (no mandatory confirmation gate).
 6. `wealthfolio-query get-cash-balance --currency {market_currency} --scope-type {scope_type} --scope-value {scope_value}` → available cash within the selected scope.
 7. `corp-actions-monitor --market {market} --snapshot temp/research/portfolio-snapshot.csv` → emits `temp/research/warnings/corp-actions.md`. Phase 1 continues even when warnings exist.
 8. `memory-query` last 4 weekly runs (prefer same market + same scope when available) + `context/{market}/last-run.md`.
