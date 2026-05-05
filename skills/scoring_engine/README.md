@@ -6,14 +6,14 @@ Authoritative behavior lives in [`docs/SPEC.md §6.3, §7.6, §8.2–§8.6, §9,
 
 ## Status
 
-This skill is being built milestone-by-milestone. **M3.3 has landed `check-thresholds` + `persona --persona my-philosophy`** — both handlers dispatch to `my_philosophy.py`, producing deterministic JSON output per SPEC §9.3. Other subcommands still no-op with exit 2 and a `{"error":"not_implemented"}` body on stderr. Real handlers land in:
+This skill is being built milestone-by-milestone. **M3.5 has landed `lib/line_items.py`** — the adapter that turns `metrics.json.history` into the upstream-shaped list of attribute-access objects the ported persona `analyze_*` functions expect. Persona handlers `jhunjhunwala` / `buffett` / `munger` / `pabrai` still no-op with exit 2 and a `{"error":"not_implemented"}` body on stderr. Real handlers land in:
 
 | Subtask | Status |
 |---|---|
 | CLI shell + argparse surface + exit-code matrix | M3.2 ✓ |
 | `check-thresholds`, `persona --persona my-philosophy` | M3.3 ✓ |
-| `metrics.json` schema extension (`history.line_items[]`, governance/thesis flags) | M3.4 (pending) |
-| `lib/line_items.py` adapter | M3.5 (pending) |
+| `metrics.json` schema extension (`history.line_items[]`, governance/thesis flags) | M3.4 ✓ |
+| `lib/line_items.py` adapter | M3.5 ✓ |
 | `persona --persona {jhunjhunwala,buffett,munger,pabrai}` | M3.6 – M3.9 (pending) |
 | `concentration-check` + `risk_manager.py` port + `prices.json` shape | M3.10 (pending) |
 | `full` (combines `check-thresholds` + `my-philosophy`) | M3.11 (pending) |
@@ -108,13 +108,33 @@ skills/scoring_engine/
 │   ├── munger.py                 # M3.8
 │   └── pabrai.py                 # M3.9
 ├── lib/
-│   ├── line_items.py             # M3.5 — metrics.json.history → upstream-shaped dicts
+│   ├── __init__.py
+│   ├── line_items.py             # M3.5 ✓ — metrics.json.history → SimpleNamespace list
 │   └── fetch_prices.py           # M3.10 — path-only stub (no network)
 ├── requirements.txt
 └── README.md
 ```
 
 Most of those files do not exist yet — see the **Status** table above.
+
+## `lib/line_items.py` adapter
+
+The rotating-persona ports (`jhunjhunwala` / `buffett` / `munger` / `pabrai`) are thin-wrapped upstream code, and upstream reaches into each line-item with attribute access — `li.revenue`, `getattr(li, "free_cash_flow", None)`, and `hasattr(li, "research_and_development")` all coexist in the same file (see [`charlie_munger.py`](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/charlie_munger.py) L243 – L254). The adapter bridges this to our JSON-first world:
+
+```python
+from skills.scoring_engine.lib import line_items
+
+items = line_items.to_line_items(metrics, limit=8)   # newest-first, SimpleNamespace
+```
+
+- **Input:** `metrics["history"]["line_items"]` — list of dicts keyed by upstream `search_line_items()` attribute names (SPEC §18.2 per M3.4).
+- **Output:** list of [`types.SimpleNamespace`](https://docs.python.org/3/library/types.html#types.SimpleNamespace) — supports bare-attr, `getattr`, and `hasattr`. Attributes absent from the source dict are absent on the namespace; upstream's `getattr(..., None)` already handles that.
+- **Newest-first** contract from the producer (M3.4 / investigation §3) is trusted verbatim — the adapter does not re-derive order by parsing `periods` strings.
+- **`limit` parameter** slices to the first N entries, e.g. Jhunjhunwala's upstream `limit=5`, Pabrai's `limit=8`.
+- **Graceful empty cases:** missing `history`, missing `history.line_items`, or empty list all return `[]`. What counts as "insufficient data" is **per-persona** (investigation §5.2) — the adapter does not decide.
+- **Type validation:** malformed shapes (`history` is a list, `line_items` is a string, etc.) raise `TypeError` to the caller — that's a producer bug, not a data-coverage problem.
+
+Auxiliary accessors `line_items.periods(metrics)` and `line_items.period_type(metrics)` return the sibling fields for personas that cite missing-period counts in their `insufficient_data` payload.
 
 ## Upstream attribution
 
