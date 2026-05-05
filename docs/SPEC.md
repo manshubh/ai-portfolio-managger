@@ -1376,7 +1376,7 @@ ai-portfolio-manager/
 │   └── ledger.db                             # SQLite FTS5; created by ledger-ctl init
 │
 ├── skills/
-│   ├── scoring-engine/                       # Ported from virattt/ai-hedge-fund
+│   ├── scoring_engine/                       # Ported from virattt/ai-hedge-fund (directory uses underscore for Python module rules; skill name and CLI verbs stay hyphenated)
 │   │   ├── fundamentals.py
 │   │   ├── phil_fisher.py
 │   │   ├── risk_manager.py

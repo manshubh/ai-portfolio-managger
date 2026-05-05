@@ -1,0 +1,9 @@
+# scoring_engine runtime dependencies.
+#
+# M3.2 ships the CLI shell only — argparse + json + sys are stdlib, so this
+# file is empty by design. Subsequent subtasks add what they need:
+#   - M3.3 (my_philosophy.py)        : pyyaml (philosophy YAML front-matter parse)
+#   - M3.10 (risk_manager.py port)   : numpy (HHI, log-returns, correlation)
+#   - tests                          : pytest (dev-only; declared at the project root, not here)
+#
+# Pin exact versions when each lands; do not pre-pin here.

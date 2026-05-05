@@ -195,9 +195,12 @@ flowchart TB
 **Dependencies.** M0 (YAML front-matter parse), M2 (for later integration fixtures).
 
 **Deliverables.**
+
+> **Directory note.** Filesystem path is `skills/scoring_engine/` (underscore) because Python module identifiers can't contain hyphens — same precedent as `skills/wealthfolio_query/`. The skill name and CLI verbs stay hyphenated (`scoring-engine check-thresholds …`); only the directory and Python package use the underscore. SPEC §17 amended in the M3.2 commit. Path strings below using `scoring-engine/` are read as `scoring_engine/` on disk.
+
 - Port `src/agents/fundamentals.py`, `src/agents/phil_fisher.py`, `src/agents/risk_manager.py` from `virattt/ai-hedge-fund` at the pinned SHA into `skills/scoring-engine/`. Each ported file keeps its upstream path and SHA in a header comment; MIT text added to `THIRD_PARTY.md`.
 - Persona modules for MVP roster (SPEC §8.3): `skills/scoring-engine/personas/{jhunjhunwala,buffett,munger,pabrai}.py`. The ported `ai-hedge-fund` personas retain their native internal math scales unimodified to provide distinct alternative viewpoints.
-- Primary scorer: `skills/scoring-engine/my_philosophy.py` which calculates the overall 35/20/20/10/15 rubric scores as the exclusive source of truth for the portfolio score, reading thresholds from the philosophy YAML front-matter.
+- Primary scorer: `skills/scoring-engine/my_philosophy.py` is the exclusive source of truth for the philosophy-fit (PF/15) sub-score and the §9.3 threshold pass/fail table, reading thresholds from the philosophy YAML front-matter. The Fundamental (F/35), Business Story (BS/20), Valuation (V/20), and News (N/10) sub-scores remain Phase 4 LLM judgments per [SPEC §10.5](SPEC.md), composed using the deterministic table as evidence. (See [`research/milestones/M3-investigation.md §2`](../research/milestones/M3-investigation.md) for the rationale.)
 - `skills/scoring-engine/engine.py` CLI with subcommands `check-thresholds`, `persona`, `concentration-check`, `full` per SPEC §18.3.
 - Sector-exception handling (SPEC §9.3 `exception`, `effective_threshold`, `pass_with_exception`): `it_mnc`, `psus`, `foreign_sub`, `stock_exchanges` all test-covered.
 - `banking_nbfc` scheme with its distinct threshold table (SPEC §7.6).
