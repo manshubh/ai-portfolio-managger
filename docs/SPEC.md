@@ -1515,6 +1515,39 @@ Normalized JSON shape emitted by the agent after aggregation (the shape, not the
     "price_52w_high": 1740, "price_52w_low": 1350,
     "current_price": 1555
   },
+  "history": {
+    "period_type": "annual",
+    "periods": ["FY26", "FY25", "FY24", "FY23", "FY22", "FY21", "FY20", "FY19"],
+    "line_items": [
+      {
+        "revenue": 12345,
+        "gross_profit": 4567,
+        "gross_margin": 0.37,
+        "operating_income": 2345,
+        "operating_margin": 0.19,
+        "net_income": 1890,
+        "earnings_per_share": 45.2,
+        "ebit": 2345,
+        "free_cash_flow": 1670,
+        "total_debt": 230,
+        "cash_and_equivalents": 4500,
+        "current_assets": 8900,
+        "current_liabilities": 3400,
+        "total_assets": 21000,
+        "total_liabilities": 5800,
+        "shareholders_equity": 15200,
+        "capital_expenditure": 400,
+        "depreciation_and_amortization": 180,
+        "outstanding_shares": 4150,
+        "dividends_and_other_cash_distributions": 720,
+        "issuance_or_purchase_of_equity_shares": 0,
+        "return_on_equity": 0.287,
+        "return_on_invested_capital": 0.330
+      }
+    ]
+  },
+  "governance_red_flag": false,
+  "user_thesis_exit": false,
   "sources": [
     { "field": "revenue_yoy_pct", "source": "screener.in", "tier": 2, "url": "...", "accessed": "2026-04-17" },
     ...
@@ -1522,6 +1555,16 @@ Normalized JSON shape emitted by the agent after aggregation (the shape, not the
   "missing_fields": ["some_optional_metric"]
 }
 ```
+
+**`history` block (multi-period line items).** Carries per-period line-item arrays consumed by `scoring-engine persona` (§18.3) for persona base-score math ported from `virattt/ai-hedge-fund` (see `THIRD_PARTY.md §2.1`). The attribute names mirror upstream's `search_line_items()` keys verbatim so the ported `analyze_*` sub-functions read them without renames. Rules:
+
+- `period_type` is `"annual"` or `"ttm"`; the aggregator picks per market/persona need, default `"annual"`.
+- `periods` is newest-first (so `line_items[0]` is the most recent period). `line_items` is the same length and order as `periods`.
+- Currency is the native ledger currency (₹ Cr for India, consistent with `fund.mcap_cr`). No cross-market conversion here.
+- When fewer than the requested N periods are available, the array is shorter. Personas that require a minimum (e.g. ≥3 periods for growth analysis) emit `signal: insufficient_data` per §18.3 rather than fabricating values.
+- Personas that do not need this block (`my-philosophy` and `check-thresholds`, which read only `fund.*`) are exempt from `insufficient_data` when `history` is absent.
+
+**Dealbreaker-signal booleans.** `governance_red_flag` (default `false`) is set by the Phase 2 research agent when confirmed fraud, SEBI/SEC action, or material governance incident is cited in `[News]` / `[Biz]`. `user_thesis_exit` (default `false`) is set by the Phase 2 agent when the user's `[Phil] Thesis` line reads `SELL` or `EXIT`. Both are consumed by `scoring-engine check-thresholds` to trigger the §9.2 PF=0 dealbreaker path; the engine does not infer them.
 
 ### 18.3 `scoring-engine`
 
