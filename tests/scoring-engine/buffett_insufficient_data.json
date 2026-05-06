@@ -1,0 +1,39 @@
+{
+  "ticker": "INFY",
+  "as_of": "2026-04-17",
+  "fund": {
+    "roe_pct": 28.7,
+    "mcap_cr": 720000,
+    "fcf_positive": true
+  },
+  "history": {
+    "period_type": "annual",
+    "periods": ["FY26"],
+    "line_items": [
+      {
+        "revenue": 153000,
+        "net_income": 26000,
+        "earnings_per_share": 62.8,
+        "operating_income": 33660,
+        "operating_margin": 0.22,
+        "gross_margin": 0.37,
+        "total_assets": 21000,
+        "total_liabilities": 5800,
+        "shareholders_equity": 15200,
+        "total_debt": 230,
+        "current_assets": 8900,
+        "current_liabilities": 3400,
+        "free_cash_flow": 22000,
+        "capital_expenditure": 400,
+        "depreciation_and_amortization": 180,
+        "outstanding_shares": 4150,
+        "dividends_and_other_cash_distributions": -720,
+        "issuance_or_purchase_of_equity_shares": 0,
+        "return_on_equity": 0.287,
+        "return_on_invested_capital": 0.330
+      }
+    ]
+  },
+  "governance_red_flag": false,
+  "user_thesis_exit": false
+}

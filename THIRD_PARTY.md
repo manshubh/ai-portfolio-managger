@@ -66,10 +66,10 @@ SOFTWARE.
 | `src/agents/phil_fisher.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/phil_fisher.py) | pending | `skills/scoring-engine/phil_fisher.py` |
 | `src/agents/risk_manager.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/risk_manager.py) | pending | `skills/scoring-engine/risk_manager.py` |
 | `src/agents/ben_graham.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/ben_graham.py) | pending | `skills/scoring-engine/personas/graham.py` |
-| `src/agents/warren_buffett.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/warren_buffett.py) | pending | `skills/scoring-engine/personas/buffett.py` |
+| `src/agents/warren_buffett.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/warren_buffett.py) | ported `0f6ac48` | `skills/scoring_engine/personas/buffett.py` |
 | `src/agents/charlie_munger.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/charlie_munger.py) | pending | `skills/scoring-engine/personas/munger.py` |
 | `src/agents/mohnish_pabrai.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/mohnish_pabrai.py) | pending | `skills/scoring-engine/personas/pabrai.py` |
-| `src/agents/rakesh_jhunjhunwala.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/rakesh_jhunjhunwala.py) | pending | `skills/scoring-engine/personas/jhunjhunwala.py` |
+| `src/agents/rakesh_jhunjhunwala.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/rakesh_jhunjhunwala.py) | ported `0f6ac48` | `skills/scoring_engine/personas/jhunjhunwala.py` |
 | `src/agents/aswath_damodaran.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/aswath_damodaran.py) | pending | `skills/scoring-engine/personas/damodaran.py` |
 | `src/agents/peter_lynch.py` | [raw](https://raw.githubusercontent.com/virattt/ai-hedge-fund/0f6ac487986f7eb80749ed42bd26fb8330c450db/src/agents/peter_lynch.py) | pending | `skills/scoring-engine/personas/lynch.py` |
 

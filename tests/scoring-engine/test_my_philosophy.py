@@ -172,9 +172,9 @@ def test_persona_my_philosophy_wraps_pf() -> None:
     assert result["signal"] == "neutral"
 
 
-def test_persona_other_still_not_implemented() -> None:
+def test_persona_munger_still_not_implemented() -> None:
     rc, _, err = _run_cli(
-        "persona", "--persona", "jhunjhunwala",
+        "persona", "--persona", "munger",
         "--metrics", str(FIXTURES / "infy.json"),
     )
     assert rc == 2

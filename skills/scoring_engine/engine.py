@@ -13,6 +13,7 @@ import sys
 from typing import NoReturn
 
 from skills.scoring_engine import my_philosophy
+from skills.scoring_engine.personas import buffett, jhunjhunwala
 
 EXIT_OK = 0
 EXIT_BAD_INPUT = 1
@@ -49,26 +50,38 @@ def _handle_check_thresholds(args: argparse.Namespace) -> NoReturn:
     _emit(result)
 
 
+PORTED_PERSONAS = {
+    "jhunjhunwala": jhunjhunwala.run,
+    "buffett":      buffett.run,
+}
+
+
 def _handle_persona(args: argparse.Namespace) -> NoReturn:
-    if args.persona != "my-philosophy":
-        _not_implemented(
-            f"persona --persona {args.persona}",
-            "M3.6–M3.9 (rotating persona ports)",
+    if args.persona == "my-philosophy":
+        missing = [flag for flag, val in [("--philosophy", args.philosophy),
+                                           ("--scheme", args.scheme)] if not val]
+        if missing:
+            print(json.dumps({
+                "error": "missing_flag",
+                "message": f"{', '.join(missing)} required for persona --persona my-philosophy",
+            }), file=sys.stderr)
+            sys.exit(EXIT_BAD_INPUT)
+        philosophy = my_philosophy.load_philosophy(args.philosophy)
+        metrics = my_philosophy.load_metrics(args.metrics)
+        result = my_philosophy.persona_my_philosophy(
+            philosophy, metrics, args.scheme, args.sector_exception,
         )
-    missing = [flag for flag, val in [("--philosophy", args.philosophy),
-                                       ("--scheme", args.scheme)] if not val]
-    if missing:
-        print(json.dumps({
-            "error": "missing_flag",
-            "message": f"{', '.join(missing)} required for persona --persona my-philosophy",
-        }), file=sys.stderr)
-        sys.exit(EXIT_BAD_INPUT)
-    philosophy = my_philosophy.load_philosophy(args.philosophy)
-    metrics = my_philosophy.load_metrics(args.metrics)
-    result = my_philosophy.persona_my_philosophy(
-        philosophy, metrics, args.scheme, args.sector_exception,
+        _emit(result)
+
+    if args.persona in PORTED_PERSONAS:
+        metrics = my_philosophy.load_metrics(args.metrics)
+        result = PORTED_PERSONAS[args.persona](metrics)
+        _emit(result)
+
+    _not_implemented(
+        f"persona --persona {args.persona}",
+        "M3.8–M3.9 (remaining persona ports)",
     )
-    _emit(result)
 
 
 def _handle_concentration_check(_args: argparse.Namespace) -> NoReturn:
