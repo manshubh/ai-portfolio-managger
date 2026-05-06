@@ -89,8 +89,29 @@ def _handle_concentration_check(args: argparse.Namespace) -> NoReturn:
     _emit(result)
 
 
-def _handle_full(_args: argparse.Namespace) -> NoReturn:
-    _not_implemented("full", "M3.11")
+def _handle_full(args: argparse.Namespace) -> NoReturn:
+    philosophy = my_philosophy.load_philosophy(args.philosophy)
+    metrics = my_philosophy.load_metrics(args.metrics)
+
+    # Phase 4 (M10) passes --ticker from portfolio-snapshot.csv; metrics.ticker
+    # is set by Phase 2 (M9). A silent mismatch would hide a caller bug.
+    if metrics.get("ticker") != args.ticker:
+        print(json.dumps({
+            "error":   "ticker_mismatch",
+            "message": (
+                f"--ticker {args.ticker!r} does not match "
+                f"metrics.ticker {metrics.get('ticker')!r}"
+            ),
+        }), file=sys.stderr)
+        sys.exit(EXIT_BAD_INPUT)
+
+    thresholds = my_philosophy.check_thresholds(
+        philosophy, metrics, args.scheme, args.sector_exception,
+    )
+    persona = my_philosophy.persona_my_philosophy(
+        philosophy, metrics, args.scheme, args.sector_exception,
+    )
+    _emit({"thresholds": thresholds, "my_philosophy": persona})
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -183,17 +204,23 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Convenience wrapper that emits {thresholds: {...}, my_philosophy: {...}} "
             "for a single ticker — combines `check-thresholds` and "
-            "`persona --persona my-philosophy`. Rotating personas (jhunjhunwala / "
-            "buffett / munger / pabrai) are NOT included here; Phase 5 calls "
-            "them individually per investigation §7."
+            "`persona --persona my-philosophy`. --ticker is asserted against "
+            "metrics.ticker to catch caller bugs. Rotating personas "
+            "(jhunjhunwala / buffett / munger / pabrai) are NOT included here; "
+            "Phase 5 calls them individually per investigation §7."
         ),
     )
     p_fu.add_argument("--ticker", required=True, metavar="<T>",
-                     help="Ticker symbol (e.g. INFY, RELIANCE).")
+                     help="Ticker symbol (e.g. INFY, RELIANCE); asserted against metrics.ticker.")
     p_fu.add_argument("--metrics", required=True, metavar="<path>",
                      help="Path to metrics.json.")
     p_fu.add_argument("--philosophy", required=True, metavar="<path>",
                      help="Path to philosophy.md.")
+    p_fu.add_argument("--scheme", required=True, choices=SCHEMES,
+                     help="Threshold scheme (caller-decided; Phase 4 detects from [Overview] Sector).")
+    p_fu.add_argument("--sector-exception", metavar="<name>", default=None,
+                     help="Optional sector exception key from sector_exceptions: "
+                          "(e.g. it_mnc, psus, hospitals, foreign_sub, stock_exchanges).")
     p_fu.set_defaults(func=_handle_full)
 
     return parser

@@ -6,7 +6,7 @@ Authoritative behavior lives in [`docs/SPEC.md §6.3, §7.6, §8.2–§8.6, §9,
 
 ## Status
 
-This skill is being built milestone-by-milestone. **M3.10 has landed `risk_manager.py` + `concentration-check`** — portfolio-level HHI, per-stock volatility-adjusted position limits, and top-5 correlation pairs. The `full` convenience wrapper remains a no-op stub (exit 2) until M3.11.
+This skill is being built milestone-by-milestone. **M3.11 has landed `full`** — composes `check-thresholds` + `persona --persona my-philosophy` into `{thresholds, my_philosophy}`. All four CLI subcommands are now wired; M3 wrap-up (doc flips + deferred-persona follow-up) lives in M3.12.
 
 | Subtask | Status |
 |---|---|
@@ -16,7 +16,7 @@ This skill is being built milestone-by-milestone. **M3.10 has landed `risk_manag
 | `lib/line_items.py` adapter | M3.5 ✓ |
 | `persona --persona {jhunjhunwala,buffett,munger,pabrai}` | M3.6 – M3.9 ✓ |
 | `concentration-check` + `risk_manager.py` port + `prices.json` shape | M3.10 ✓ |
-| `full` (combines `check-thresholds` + `my-philosophy`) | M3.11 (pending) |
+| `full` (combines `check-thresholds` + `my-philosophy`) + fundamentals-first invariant | M3.11 ✓ |
 
 ## Hyphen → underscore directory note
 
@@ -75,10 +75,12 @@ Portfolio-level sanity per §9.5. Emits HHI = Σ(weight_i²), per-stock volatili
 python3 -m skills.scoring_engine.engine full \
   --ticker <T> \
   --metrics <path-to-metrics.json> \
-  --philosophy <path-to-philosophy.md>
+  --philosophy <path-to-philosophy.md> \
+  --scheme {non_financial|banking_nbfc} \
+  [--sector-exception <name>]
 ```
 
-Convenience wrapper for Phase 4 that composes `check-thresholds` and `persona --persona my-philosophy` into `{thresholds: {...}, my_philosophy: {...}}` in a single invocation. Rotating personas are still called separately by Phase 5 (investigation §7).
+Convenience wrapper for Phase 4 that composes `check-thresholds` and `persona --persona my-philosophy` into `{thresholds: {...}, my_philosophy: {...}}` in a single invocation. `--ticker` is asserted against `metrics.ticker` (exit 1 on mismatch). Rotating personas are still called separately by Phase 5 (investigation §7). SPEC §18.3 was amended in the M3.11 commit to reflect the `--scheme` / `--sector-exception` flags (additive).
 
 ## Exit-code matrix
 

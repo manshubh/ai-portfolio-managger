@@ -1591,8 +1591,10 @@ scoring-engine concentration-check \
 scoring-engine full \
   --ticker <T> \
   --metrics <metrics.json> \
-  --philosophy <philosophy.md>
-  → combined output (thresholds + my-philosophy persona)
+  --philosophy <philosophy.md> \
+  --scheme {non_financial|banking_nbfc} \
+  [--sector-exception <name>]
+  → combined output {thresholds, my_philosophy}
 ```
 
 ### 18.4 `corp-actions-monitor`
