@@ -172,11 +172,3 @@ def test_persona_my_philosophy_wraps_pf() -> None:
     assert result["signal"] == "neutral"
 
 
-def test_persona_munger_still_not_implemented() -> None:
-    rc, _, err = _run_cli(
-        "persona", "--persona", "munger",
-        "--metrics", str(FIXTURES / "infy.json"),
-    )
-    assert rc == 2
-    body = json.loads(err)
-    assert body["error"] == "not_implemented"

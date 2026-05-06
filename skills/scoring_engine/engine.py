@@ -13,7 +13,7 @@ import sys
 from typing import NoReturn
 
 from skills.scoring_engine import my_philosophy
-from skills.scoring_engine.personas import buffett, jhunjhunwala
+from skills.scoring_engine.personas import buffett, jhunjhunwala, munger, pabrai
 
 EXIT_OK = 0
 EXIT_BAD_INPUT = 1
@@ -53,6 +53,8 @@ def _handle_check_thresholds(args: argparse.Namespace) -> NoReturn:
 PORTED_PERSONAS = {
     "jhunjhunwala": jhunjhunwala.run,
     "buffett":      buffett.run,
+    "munger":       munger.run,
+    "pabrai":       pabrai.run,
 }
 
 
@@ -73,15 +75,9 @@ def _handle_persona(args: argparse.Namespace) -> NoReturn:
         )
         _emit(result)
 
-    if args.persona in PORTED_PERSONAS:
-        metrics = my_philosophy.load_metrics(args.metrics)
-        result = PORTED_PERSONAS[args.persona](metrics)
-        _emit(result)
-
-    _not_implemented(
-        f"persona --persona {args.persona}",
-        "M3.8–M3.9 (remaining persona ports)",
-    )
+    metrics = my_philosophy.load_metrics(args.metrics)
+    result = PORTED_PERSONAS[args.persona](metrics)
+    _emit(result)
 
 
 def _handle_concentration_check(_args: argparse.Namespace) -> NoReturn:
