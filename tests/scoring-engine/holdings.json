@@ -1,0 +1,65 @@
+{
+  "as_of": "2026-04-17",
+  "holdings": [
+    {
+      "allocation_pct": 15.0,
+      "market_value": 150000.0,
+      "sector": "Energy",
+      "ticker": "RELIANCE.NS"
+    },
+    {
+      "allocation_pct": 9.0,
+      "market_value": 90000.0,
+      "sector": "IT",
+      "ticker": "INFY.NS"
+    },
+    {
+      "allocation_pct": 12.0,
+      "market_value": 120000.0,
+      "sector": "Financials",
+      "ticker": "HDFCBANK.NS"
+    },
+    {
+      "allocation_pct": 8.0,
+      "market_value": 80000.0,
+      "sector": "IT",
+      "ticker": "TCS.NS"
+    },
+    {
+      "allocation_pct": 7.0,
+      "market_value": 70000.0,
+      "sector": "Telecom",
+      "ticker": "BHARTIARTL.NS"
+    },
+    {
+      "allocation_pct": 10.0,
+      "market_value": 100000.0,
+      "sector": "Consumer",
+      "ticker": "ITC.NS"
+    },
+    {
+      "allocation_pct": 6.0,
+      "market_value": 60000.0,
+      "sector": "Industrials",
+      "ticker": "LT.NS"
+    },
+    {
+      "allocation_pct": 11.0,
+      "market_value": 110000.0,
+      "sector": "Consumer",
+      "ticker": "HINDUNILVR.NS"
+    },
+    {
+      "allocation_pct": 8.0,
+      "market_value": 80000.0,
+      "sector": "Auto",
+      "ticker": "MARUTI.NS"
+    },
+    {
+      "allocation_pct": 14.0,
+      "market_value": 140000.0,
+      "sector": "Energy",
+      "ticker": "COALINDIA.NS"
+    }
+  ]
+}

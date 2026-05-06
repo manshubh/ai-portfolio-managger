@@ -6,7 +6,7 @@ Authoritative behavior lives in [`docs/SPEC.md §6.3, §7.6, §8.2–§8.6, §9,
 
 ## Status
 
-This skill is being built milestone-by-milestone. **M3.5 has landed `lib/line_items.py`** — the adapter that turns `metrics.json.history` into the upstream-shaped list of attribute-access objects the ported persona `analyze_*` functions expect. Persona handlers `jhunjhunwala` / `buffett` / `munger` / `pabrai` still no-op with exit 2 and a `{"error":"not_implemented"}` body on stderr. Real handlers land in:
+This skill is being built milestone-by-milestone. **M3.10 has landed `risk_manager.py` + `concentration-check`** — portfolio-level HHI, per-stock volatility-adjusted position limits, and top-5 correlation pairs. The `full` convenience wrapper remains a no-op stub (exit 2) until M3.11.
 
 | Subtask | Status |
 |---|---|
@@ -14,8 +14,8 @@ This skill is being built milestone-by-milestone. **M3.5 has landed `lib/line_it
 | `check-thresholds`, `persona --persona my-philosophy` | M3.3 ✓ |
 | `metrics.json` schema extension (`history.line_items[]`, governance/thesis flags) | M3.4 ✓ |
 | `lib/line_items.py` adapter | M3.5 ✓ |
-| `persona --persona {jhunjhunwala,buffett,munger,pabrai}` | M3.6 – M3.9 (pending) |
-| `concentration-check` + `risk_manager.py` port + `prices.json` shape | M3.10 (pending) |
+| `persona --persona {jhunjhunwala,buffett,munger,pabrai}` | M3.6 – M3.9 ✓ |
+| `concentration-check` + `risk_manager.py` port + `prices.json` shape | M3.10 ✓ |
 | `full` (combines `check-thresholds` + `my-philosophy`) | M3.11 (pending) |
 
 ## Hyphen → underscore directory note

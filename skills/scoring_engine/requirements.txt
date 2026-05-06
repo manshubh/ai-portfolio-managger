@@ -1,8 +1,9 @@
 # scoring_engine runtime dependencies.
 #
-#   - pyyaml (M3.3) — parse philosophy.md YAML front-matter (§7.6)
-#   - numpy  (M3.10, pending) — risk_manager port (HHI, log-returns, correlation)
+#   - pyyaml (M3.3)  — parse philosophy.md YAML front-matter (§7.6)
+#   - numpy  (M3.10) — risk_manager port (vol, correlation, HHI arithmetic)
 #
 # pytest is dev-only; declared in the repo-root requirements-dev.txt.
 
 pyyaml>=6.0
+numpy>=1.26

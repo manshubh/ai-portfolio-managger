@@ -12,7 +12,8 @@ import json
 import sys
 from typing import NoReturn
 
-from skills.scoring_engine import my_philosophy
+from skills.scoring_engine import my_philosophy, risk_manager
+from skills.scoring_engine.lib import fetch_prices
 from skills.scoring_engine.personas import buffett, jhunjhunwala, munger, pabrai
 
 EXIT_OK = 0
@@ -80,8 +81,12 @@ def _handle_persona(args: argparse.Namespace) -> NoReturn:
     _emit(result)
 
 
-def _handle_concentration_check(_args: argparse.Namespace) -> NoReturn:
-    _not_implemented("concentration-check", "M3.10")
+def _handle_concentration_check(args: argparse.Namespace) -> NoReturn:
+    philosophy = my_philosophy.load_philosophy(args.philosophy)
+    holdings = fetch_prices.read_holdings(args.holdings)
+    prices = fetch_prices.read_prices(args.price_history)
+    result = risk_manager.run(holdings, prices, philosophy)
+    _emit(result)
 
 
 def _handle_full(_args: argparse.Namespace) -> NoReturn:
